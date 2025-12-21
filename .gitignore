@@ -1,0 +1,8 @@
+./server/.gitignore
+./client/.gitignore
+./server/venv/
+./client/venv/
+./server/.env
+./server/启动命令.txt
+./client/启动命令.txt
+./gitignore

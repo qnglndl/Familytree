@@ -1,0 +1,92 @@
+<!--
+ * @Author: git config qnglndl && git config fhfhfhfu114514@163.com
+ * @Date: 2025-12-20 08:44:31
+ * @LastEditors: qnglndl fhfhfhfu114514@163.com
+ * @LastEditTime: 2025-12-21 06:26:57
+ * @FilePath: /client/templates/register.html
+-->
+<!--
+ *                        _oo0oo_
+ *                       o8888888o
+ *                       88" . "88
+ *                       (| -_- |)
+ *                       0\  =  /0
+ *                     ___/`---'\___
+ *                   .' \\|     |// '.
+ *                  / \\|||  :  |||// \
+ *                 / _||||| -:- |||||- \
+ *                |   | \\\  - /// |   |
+ *                | \_|  ''\---/''  |_/ |
+ *                \  .-\__  '-'  ___/-. /
+ *              ___'. .'  /--.--\  `. .'___
+ *           ."" '<  `.___\_<|>_/___.' >' "".
+ *          | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+ *          \  \ `_.   \_ __\ /__ _/   .-` /  /
+ *      =====`-.____`.___ \_____/___.-`___.-'=====
+ *                        `=---='
+ * 
+ * 
+ *      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * 
+ *            佛祖保佑     永不宕机     永无BUG
+ * 
+ *        佛曰:  
+ *                写字楼里写字间，写字间里程序员；  
+ *                程序人员写程序，又拿程序换酒钱。  
+ *                酒醒只在网上坐，酒醉还来网下眠；  
+ *                酒醉酒醒日复日，网上网下年复年。  
+ *                但愿老死电脑间，不愿鞠躬老板前；  
+ *                奔驰宝马贵者趣，公交自行程序员。  
+ *                别人笑我忒疯癫，我笑自己命太贱；  
+ *                不见满街漂亮妹，哪个归得程序员？
+ -->
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>族谱注册</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; background:#f7f7f7; }
+        .reg-box { width: 360px; margin: 8% auto; padding: 30px; background:#fff; border-radius:6px; box-shadow:0 0 10px rgba(0,0,0,.1); }
+        h2 { text-align:center; margin-bottom:25px; }
+        .form-item { margin-bottom:15px; }
+        label { display:block; margin-bottom:5px; }
+        input[type=text], input[type=password] { width:100%; padding:8px; box-sizing:border-box; }
+        button { width:100%; padding:10px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+        button:hover { background:#1e7e34; }
+        .links { text-align:center; margin-top:15px; }
+        .links a { color:#007bff; text-decoration:none; font-size:14px; }
+        .links a:hover { text-decoration:underline; }
+        .err-msg { color:#d93025; text-align:center; margin-top:10px; }
+    </style>
+</head>
+<body>
+<div class="reg-box">
+    <h2>族谱注册</h2>
+    <div class="form-item">
+        <label>用户名</label>
+        <input type="text" id="name" placeholder="请输入用户名">
+    </div>
+    <div class="form-item">
+        <label>手机号</label>
+        <input type="text" id="phone" placeholder="请输入手机号">
+    </div>
+    <div class="form-item">
+        <label>账号</label>
+        <input type="text" id="account" placeholder="请输入账号">
+    </div>
+    <div class="form-item">
+        <label>密码</label>
+        <input type="password" id="password" placeholder="请输入密码">
+    </div>
+    <button id="regBtn">立即注册</button>
+    <div class="err-msg" id="errMsg"></div>
+    <div class="links">
+        <a href="{{ url_for('login_page') }}">已有账号？去登录</a>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/register.js') }}"></script>
+</body>
+</html>
