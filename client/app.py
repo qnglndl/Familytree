@@ -9,6 +9,7 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for
+import os
 
 app = Flask(__name__)
 
@@ -49,6 +50,9 @@ def register_page():
     return render_template("register.html")
 
 if __name__ == "__main__":
+    if (os.system(f"ping {REMOTE_API_BASE} -c 1 -W 1 > /dev/null 2>&1") != 0):
+         print("远端服务器无法访问，请检查网络连接或远端服务器状态。")
+         exit(1)
     print(r"""
                         _oo0oo_
                        o8888888o

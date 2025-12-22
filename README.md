@@ -9,11 +9,16 @@
 ## 欢迎阅读本文档！
 ### 该文档是关于孔氏家族记录程序的文档
 # server文件夹说明
+## 要把.env.txt改为.env，不然程序无法运行！
 ### 语言:python 
 ### 库:Flask(2.3.3),Flask-CORS(4.0.0),PyJWT(2.8.0),pymysql(01.1.0),cryptography(41.0.4),python-dotenv(1.0.0)
 # 下列命令要在server目录下执行！
 ### 安装命令
-```shell
+```shell(windows)
+python -m venv myenv
+pip install -r requirements.txt
+```
+```shell(linnux/mac)
 python -m venv myenv
 pip install -r requirements.txt
 ```
