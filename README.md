@@ -15,11 +15,11 @@
 # 下列命令要在server目录下执行！
 ### 安装命令
 ```shell(windows)
-python -m venv myenv
+myenv\Scripts\activate
 pip install -r requirements.txt
 ```
 ```shell(linnux/mac)
-python -m venv myenv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 ### 启动命令
@@ -118,9 +118,18 @@ curl -X POST http://server_ip:5001/api/person/detail -H "Authorization: Bearer <
 
 
 # client文件夹说明
+### 语言:python,html,js
+### python库:blinker(1.9.0)click(8.3.1)Flask(3.1.2)itsdangerous(2.2.0)Jinja2(3.1.6)MarkupSafe(3.0.3)Werkzeug(3.1.4)
+
+# 下列命令要在client目录下执行！
 ### 安装命令
-```shell
-python -m venv myenv
+```shell(windows)
+myenv\Scripts\activate
+pip install -r requirements.txt
+```
+```source venv/bin/activate
+shell(linux/mac)
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 ### 启动命令
@@ -159,4 +168,5 @@ deactivate
 
 # 后记
 制作人员名单：孔焕彬(server)、孔思勋(client)  
+至于为啥所有文件里的作者同一个人，那规范文件的不就是一个人吗  
 做这玩意要死要活的＞﹏＜我太难了/(ㄒoㄒ)/~~
