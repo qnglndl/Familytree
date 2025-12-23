@@ -10,6 +10,7 @@ Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查�
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
+import re
 
 app = Flask(__name__)
 
@@ -18,11 +19,15 @@ with open("server_ip.txt", "r", encoding="utf-8") as f:
     server_ip = f.readline().strip()
     REMOTE_API_BASE = server_ip # 仅示例，真实地址请替换
 
+# 提取主机名用于后续检查
+match = re.search(r'(?<=://)([^:/\[\]]+|\[[^\]]+\])', REMOTE_API_BASE)
+host = match.group(1).strip('[]') if match else None
+
 @app.route("/")
 def index():
     """根地址：若未登录则跳登录页，否则跳 /home（演示用）"""
     # 简单判断：前端会把 token 存 localStorage，这里只做后端占位
-    return redirect(url_for("index.html"))
+    return render_template("index.html")
 
 @app.route("/login")
 def login_page():
@@ -61,9 +66,13 @@ def server_ip():
         return jsonify({"ip": "localhost"}), 500
 
 if __name__ == "__main__":
-    if (os.system(f"ping {REMOTE_API_BASE} -c 1 -W 1 > /dev/null 2>&1") != 0):
-         print(f"远端服务器({REMOTE_API_BASE})无法访问，请检查网络连接或远端服务器状态。")
-         exit(1)
+    if os.name == "nt":  # Windows
+        ret = os.system(f'ping -n 1 {host} >nul')
+    else:                # Unix/Linux/macOS
+        ret = os.system(f'ping -c 1 {host} > /dev/null')
+    if ret != 0:
+        print(f"远端服务器({host})无法访问，请检查网络连接或远端服务器状态。")
+        exit(1)
     print(r"""
                         _oo0oo_
                        o8888888o
