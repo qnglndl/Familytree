@@ -16,7 +16,7 @@ app = Flask(__name__)
 # 假设远端 API 的基地址，实际部署时改为你自己的域名
 with open("server_ip.txt", "r", encoding="utf-8") as f:
     server_ip = f.readline().strip()
-    REMOTE_API_BASE = f"http://{server_ip}:5001/"   # 仅示例，真实地址请替换
+    REMOTE_API_BASE = server_ip # 仅示例，真实地址请替换
 
 @app.route("/")
 def index():
@@ -62,7 +62,7 @@ def server_ip():
 
 if __name__ == "__main__":
     if (os.system(f"ping {REMOTE_API_BASE} -c 1 -W 1 > /dev/null 2>&1") != 0):
-         print("远端服务器无法访问，请检查网络连接或远端服务器状态。")
+         print(f"远端服务器({REMOTE_API_BASE})无法访问，请检查网络连接或远端服务器状态。")
          exit(1)
     print(r"""
                         _oo0oo_
