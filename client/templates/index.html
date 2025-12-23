@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>族谱引导</title>
+    <script>
+        // 前端判断登录状态
+        if (localStorage.getItem('jwt')) {
+            window.location.replace('/home');
+        } else {
+            window.location.replace('/login');
+        }
+    </script>
+</head>
+<body>
+    <!-- 如果 JS 被禁用，给出手动链接 -->
+    <noscript>
+        <p>请启用 JavaScript，或手动前往 <a href="/login">登录页</a>。</p>
+    </noscript>
+</body>
+</html>

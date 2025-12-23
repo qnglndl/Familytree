@@ -22,7 +22,7 @@ with open("server_ip.txt", "r", encoding="utf-8") as f:
 def index():
     """根地址：若未登录则跳登录页，否则跳 /home（演示用）"""
     # 简单判断：前端会把 token 存 localStorage，这里只做后端占位
-    return redirect(url_for("login_page"))
+    return redirect(url_for("index.html"))
 
 @app.route("/login")
 def login_page():
