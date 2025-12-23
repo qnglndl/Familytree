@@ -14,7 +14,9 @@ import os
 app = Flask(__name__)
 
 # 假设远端 API 的基地址，实际部署时改为你自己的域名
-REMOTE_API_BASE = "http://[2409:8a55:4d1:5861:76d4:35ff:fed1:59a9]:5001/"   # 仅示例，真实地址请替换
+with open("server_ip.txt", "r", encoding="utf-8") as f:
+    server_ip = f.readline().strip()
+    REMOTE_API_BASE = f"http://{server_ip}:5001/"   # 仅示例，真实地址请替换
 
 @app.route("/")
 def index():
@@ -48,6 +50,15 @@ def proxy_login():
 @app.route("/register")
 def register_page():
     return render_template("register.html")
+
+@app.route("/api/server_ip")
+def server_ip():
+    try:
+        with open("server_ip.txt", "r", encoding="utf-8") as f:
+            ip = f.readline().strip()
+        return jsonify({"ip": ip})
+    except Exception:
+        return jsonify({"ip": "localhost"}), 500
 
 if __name__ == "__main__":
     if (os.system(f"ping {REMOTE_API_BASE} -c 1 -W 1 > /dev/null 2>&1") != 0):

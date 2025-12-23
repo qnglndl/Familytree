@@ -133,6 +133,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 ### 启动命令
+
+在启动之前，你要在server_ip.txt填写后端ip
+
 ```shell(windows)
 myenv\Scripts\activate
 python app.py
