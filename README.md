@@ -15,7 +15,7 @@
 # 下列命令要在server目录下执行！
 ### 安装命令
 ```shell(windows)
-myenv\Scripts\activate
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 ```shell(linnux/mac)
@@ -24,7 +24,7 @@ pip install -r requirements.txt
 ```
 ### 启动命令
 ```shell(windows)
-myenv\Scripts\activate
+venv\Scripts\activate
 python app.py
 ```
 ```shell(linux/mac)
@@ -124,11 +124,10 @@ curl -X POST http://server_ip:5001/api/person/detail -H "Authorization: Bearer <
 # 下列命令要在client目录下执行！
 ### 安装命令
 ```shell(windows)
-myenv\Scripts\activate
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
-```source venv/bin/activate
-shell(linux/mac)
+```shell(linux/mac)
 source venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -137,7 +136,7 @@ pip install -r requirements.txt
 在启动之前，你要在server_ip.txt填写后端ip
 
 ```shell(windows)
-myenv\Scripts\activate
+venv\Scripts\activate
 python app.py
 ```
 ```shell(linux/mac)
