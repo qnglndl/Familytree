@@ -64,6 +64,28 @@ def server_ip():
         return jsonify({"ip": ip})
     except Exception:
         return jsonify({"ip": "localhost"}), 500
+    
+@app.route("/api/tree")
+def tree_data():
+    # 示例数据，后续从数据库中构建
+    return jsonify({
+        "id": "1",
+        "name": "张三",
+        "children": [
+            {
+                "id": "2",
+                "name": "张四（子）",
+                "children": []
+            }
+        ],
+        "parents": [
+            {
+                "id": "3",
+                "name": "张大（父）",
+                "parents": []
+            }
+        ]
+    })
 
 if __name__ == "__main__":
     if os.name == "nt":  # Windows
