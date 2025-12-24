@@ -1,0 +1,105 @@
+﻿<Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="WpfFadeInDemo.MainWindow"
+        Title="文字淡入动画" Height="320" Width="520"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <!-- 整体时间线：欢迎文字淡入(0-1s) -> 保持(1-2s) -> 文字淡出(2-3s) -> 登录表单淡入(3-3.6s) -->
+        <Storyboard x:Key="IntroStoryboard">
+            <DoubleAnimation Storyboard.TargetName="MyText"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0" To="1"
+                             BeginTime="0:0:0"
+                             Duration="0:0:1" />
+            <DoubleAnimation Storyboard.TargetName="FormPanel"
+                             Storyboard.TargetProperty="Opacity"
+                             From="0" To="1"
+                             BeginTime="0:0:0.5"
+                             Duration="0:0:1" /> 
+        </Storyboard>
+    </Window.Resources>
+
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource IntroStoryboard}" />
+        </EventTrigger>
+    </Window.Triggers>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="3*" />
+        </Grid.RowDefinitions>
+
+        <!-- 欢迎文字（居中） -->
+        <TextBlock x:Name="MyText"
+                   Grid.Row="0"
+                   Text="欢迎来到孔氏家族成员管理后台程序！"
+                   FontSize="24"
+                   FontWeight="SemiBold"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Opacity="0" />
+
+        <!-- 登录表单：居中堆叠，整体淡入 -->
+        <Border Grid.Row="1"
+                CornerRadius="8"
+                Padding="20"
+                Background="#20FFFFFF"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
+            <StackPanel x:Name="FormPanel"
+                        Width="340"
+                        Opacity="0"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Stretch"
+                        Orientation="Vertical">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="用户名："
+                               FontSize="16" />
+                    <TextBox x:Name="MyTextBox_yonghuming"
+                             Grid.Column="1"
+                             Height="30"
+                             VerticalAlignment="Center"
+                             FontSize="14" />
+                </Grid>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Text="密码："
+                               FontSize="16" />
+                    <PasswordBox x:Name="MyTextBox_mima"
+                                 Grid.Column="1"
+                                 Height="30"
+                                 VerticalAlignment="Center"
+                                 FontSize="14" />
+                </Grid>
+
+                <Button x:Name="LoginButton"
+                        Content="登录"
+                        Width="120"
+                        Height="34"
+                        HorizontalAlignment="Center"
+                        Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
