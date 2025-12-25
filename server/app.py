@@ -6,6 +6,13 @@
 注册各个API蓝图，并启动服务器。
 """
 
+import sys
+import io
+
+# 强制标准输出/错误使用UTF8编码
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 # 导入Flask核心模块，用于创建应用和处理HTTP请求
 from flask import Flask, request, jsonify
 # 导入CORS扩展，用于处理跨域资源共享
