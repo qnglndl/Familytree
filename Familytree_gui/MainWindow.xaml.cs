@@ -366,7 +366,7 @@ namespace WpfFadeInDemo
                 else
                 {
                     // 若需要默认补全5001端口，可改为：url = "http://" + input + ":5001";
-                    url = "http://" + input;
+                    url = "http://" + input + ":5001";
                 }
 
                 string? root = FindProjectRoot(AppDomain.CurrentDomain.BaseDirectory);

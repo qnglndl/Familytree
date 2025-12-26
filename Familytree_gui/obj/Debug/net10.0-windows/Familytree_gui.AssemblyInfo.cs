@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Familytree_gui")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ab559b238aa1233d1708779615d17e1815baa73b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+914fcf6691591b90e444113cb5818340886b8151")]
 [assembly: System.Reflection.AssemblyProductAttribute("Familytree_gui")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Familytree_gui")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
