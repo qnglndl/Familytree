@@ -61,58 +61,58 @@ curl -X POST http://server_ip:5001/api/person/detail -H "Authorization: Bearer <
 
 ## 文件介绍
 
-### [app.py](./app.py)
+### [app.py](./server/app.py)
 此文件为主程序  
 文件里的注释相当详细，无需多言
 
-### [check_db_tables.py](./check_db_tables.py)
+### [check_db_tables.py](./server/check_db_tables.py)
 这个文件负责连接MySQL库  
 然后进行数据库表结构检查
 
-### [debug_db_error.py](./debug_db_error.py)
+### [debug_db_error.py](./server/debug_db_error.py)
 这个文件负责连接MySQL库  
 然后追踪MySQL库的错误
 
-### [simple_db_check.py](./simple_db_check.py)
+### [simple_db_check.py](./server/simple_db_check.py)
 这个文件负责连接MySQL库   
 然后进行简单数据库表检查
 
-### [test_db_connection.py](./test_db_connection.py)
+### [test_db_connection.py](./server/test_db_connection.py)
 这个文件负责连接MySQL库  
 然后进行数据库连接测试
 
-### [test_db_tool.py](./test_db_tool.py)
+### [test_db_tool.py](./server/test_db_tool.py)
 这个文件负责连接MySQL库  
 然后进行数据库工具类测试
 
-### [app/utils/db.py](./app/utils/db.py)
+### [app/utils/db.py](./server/app/utils/db.py)
 这个文件负责连接MySQL库  
 然后进行查询
 
-### [app/utils/jwt.py](./app/utils/jwt.py)
+### [app/utils/jwt.py](./server/app/utils/jwt.py)
 这个文件负责连接MySQL库  
 然后进行生成和验证 JWT 令牌
 
-### [app/utils/password.py](./app/utils/password.py)
+### [app/utils/password.py](./server/app/utils/password.py)
 这个文件负责连接MySQL库  
 然后进行对密码的哈希处理
 
-### [app/api/auth.py](./app/api/auth.py)
+### [app/api/auth.py](./server/app/api/auth.py)
 该模块处理家庭树应用的用户认证相关接口，包括用户注册和登录功能  
 文件里的注释相当详细，无需多言
 
-### [app/api/family.py](./app/api/family.py)
+### [app/api/family.py](./server/app/api/family.py)
 该模块处理家庭树应用的家庭信息相关接口，包括家庭列表查询、创建家庭、添加成员等功能  
 文件里的注释相当详细，无需多言
 
-### [app/api/home.py](./app/api/home.py)
+### [app/api/home.py](./server/app/api/home.py)
 获取主页统计数据,好不知道干嘛的
 
-### [app/api/person.py](./app/api/person.py)
+### [app/api/person.py](./server/app/api/person.py)
 该模块处理家庭树应用的族人信息相关接口，包括族人列表查询、详情查询、添加、更新和删除等功能  
 文件里的注释相当详细，无需多言
 
-### [app/api/user.py](./app/api/user.py)
+### [app/api/user.py](./server/app/api/user.py)
 该模块处理家庭树应用的用户管理相关接口，包括用户列表查询、编辑、禁用/启用、重置密码和新增用户功能  
 文件里的注释相当详细，无需多言
 
@@ -151,21 +151,21 @@ deactivate
 # 正文
 ## 文件介绍
 ## python类
-### [app.py](./app.py)
+### [app.py](./client/app.py)
 文件里很详细的，不多赘述
 
 ## html类
-### [login.html](./templates/login.html)
+### [login.html](./client/templates/login.html)
 登录页面，css样式直接整合进去了
 
-### [register.html](./templates/register.html)
+### [register.html](./client/templates/register.html)
 注册页面，css样式直接整合进去了
 
 ## js类
-### [login.js](./static/js/login.js)
+### [login.js](./client/static/js/login.js)
 发送post请求去后台，用于登录
 
-### [register.js](./static/js/register.js)
+### [register.js](./client/static/js/register.js)
 发送post请求去后台，用于注册
 
 # 后记
