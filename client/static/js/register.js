@@ -42,15 +42,8 @@
  */
 
 (async () => {
-    // 先拉取服务器地址
-    let serverIp = 'localhost:5001';          // 兜底
-    try {
-        const r = await fetch('/api/server_ip');
-        const j = await r.json();
-        if (j.ip) serverIp = j.ip;
-    } catch (e) {
-        console.warn('无法读取 server_ip.txt，使用默认值', e);
-    }
+    // 服务器地址直接写死为 127.0.0.1:5001
+    let serverIp = '127.0.0.1:5001';
 
     const regBtn = document.getElementById('regBtn');
     regBtn.addEventListener('click', async () => {
