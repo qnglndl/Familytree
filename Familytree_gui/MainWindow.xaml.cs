@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 
+
 namespace WpfFadeInDemo
 {
     public partial class MainWindow : Window
@@ -18,11 +19,6 @@ namespace WpfFadeInDemo
         private DateTime _lastIpChangeTime;
         private const int AutoSaveDelayMs = 1000; // 1秒自动保存延迟
 
-        public MainWindow()
-        {
-            InitializeComponent();
-            LoadSavedIp();
-        }
 
         /* ===================== 启动 / 停止 ===================== */
 
@@ -171,7 +167,26 @@ namespace WpfFadeInDemo
                     {
                         string logText = new string(chars, 0, charsUsed);
                         Log(role, isError ? $"ERR: {logText}" : logText);
+                        if (role == "client" && !isError)
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(
+                                logText,
+                                @"Running on\s+(https?://[^\s]+)",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            if (match.Success)
+                            {
+                                string url = match.Groups[1].Value;
+                                // 必须在 UI 线程打开浏览器
+                                Dispatcher.Invoke(() =>
+                                {
+                                    try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+                                    catch (Exception ex) { Log("client", $"❌ 自动打开浏览器失败：{ex.Message}"); }
+                                });
+                            }
+                        }
                     }
+
+                    
 
                     // 保留未使用的字节（不完整字符），用于下次解码
                     leftoverBuffer.SetLength(0);
@@ -189,6 +204,22 @@ namespace WpfFadeInDemo
                     if (!string.IsNullOrEmpty(finalText))
                     {
                         Log(role, isError ? $"ERR: {finalText}" : finalText);
+                        if (role == "client" && !isError)
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(
+                                finalText,
+                                @"Running on\s+(https?://[^\s]+)",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            if (match.Success)
+                            {
+                                string url = match.Groups[1].Value;
+                                Dispatcher.Invoke(() =>
+                                {
+                                    try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+                                    catch (Exception ex) { Log("client", $"❌ 自动打开浏览器失败：{ex.Message}"); }
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -270,118 +301,6 @@ namespace WpfFadeInDemo
                     ClientLogBox.ScrollToEnd();
                 }
             });
-        }
-
-        /* ===================== IP 相关（无需修改） ===================== */
-
-        private void LoadSavedIp()
-        {
-            try
-            {
-                string? root = FindProjectRoot(AppDomain.CurrentDomain.BaseDirectory);
-                if (root == null) return;
-                // 确保路径包含../
-                string ipFile = Path.GetFullPath(Path.Combine(root, "..", "client", "server_ip.txt"));
-                if (File.Exists(ipFile))
-                {
-                    string content = File.ReadAllText(ipFile).Trim();
-                    if (content.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                        content.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Uri uri = new Uri(content);
-                        IpTextBox.Text = uri.Host + (uri.Port == 80 || uri.Port == 443 ? "" : $":{uri.Port}");
-                    }
-                    else
-                    {
-                        IpTextBox.Text = content;
-                    }
-                }
-            }
-            catch { /* ignore */ }
-        }
-
-        private void GetIpButton_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string host = Dns.GetHostName();
-                var ip = Dns.GetHostAddresses(host)
-                             .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork);
-                if (ip != null)
-                {
-                    IpTextBox.Text = ip.ToString();
-                    Clipboard.SetText(ip.ToString());
-                    MessageBox.Show($"已复制到剪贴板：{ip}", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                else
-                {
-                    MessageBox.Show("未找到 IPv4 地址", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"获取 IP 失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void SaveIpButton_Click(object sender, RoutedEventArgs e)
-        {
-            SaveIpToFile();
-        }
-
-        // 自动保存功能 - 文本变化后延迟1秒保存
-        private async void IpTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-        {
-            _lastIpChangeTime = DateTime.Now;
-            await Task.Delay(AutoSaveDelayMs);
-
-            // 检查是否在延迟期间有新的输入
-            if (DateTime.Now - _lastIpChangeTime >= TimeSpan.FromMilliseconds(AutoSaveDelayMs))
-            {
-                SaveIpToFile();
-            }
-        }
-
-        // 实际保存IP到文件的方法
-        // 实际保存IP到文件的方法
-        private void SaveIpToFile()
-        {
-            try
-            {
-                string input = IpTextBox.Text.Trim();
-                if (string.IsNullOrEmpty(input))
-                {
-                    return; // 空值不保存
-                }
-
-                // 自动补全协议，同时判断是否包含:5001端口
-                string url;
-                bool isHttpWith5001 = input.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && input.Contains(":5001");
-                bool isHttpsWith5001 = input.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && input.Contains(":5001");
-
-                if (isHttpWith5001 || isHttpsWith5001)
-                {
-                    url = input;
-                }
-                else
-                {
-                    // 若需要默认补全5001端口，可改为：url = "http://" + input + ":5001";
-                    url = "http://" + input + ":5001";
-                }
-
-                string? root = FindProjectRoot(AppDomain.CurrentDomain.BaseDirectory);
-                if (root == null) { Log("server", "❌ 未找到项目根目录，无法保存IP"); return; }
-
-                // 确保路径包含../
-                string ipFile = Path.GetFullPath(Path.Combine(root, "..", "client", "server_ip.txt"));
-                Directory.CreateDirectory(Path.GetDirectoryName(ipFile)!);
-                File.WriteAllText(ipFile, url);
-                Log("server", $"💾 IP已自动保存：{url}");
-            }
-            catch (Exception ex)
-            {
-                Log("server", $"❌ 保存IP失败：{ex.Message}");
-            }
         }
     }
 }

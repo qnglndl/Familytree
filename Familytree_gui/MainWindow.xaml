@@ -17,20 +17,6 @@
                                      Storyboard.TargetProperty="Opacity"
                                      From="1" To="0" BeginTime="0:0:0.5" Duration="0:0:1"/>
 
-                    <!-- IP设置区动画 -->
-                    <DoubleAnimation Storyboard.TargetName="IpLabel"
-                                     Storyboard.TargetProperty="Opacity"
-                                     From="0" To="1" BeginTime="0:0:1.5" Duration="0:0:0.5"/>
-                    <DoubleAnimation Storyboard.TargetName="IpTextBox"
-                                     Storyboard.TargetProperty="Opacity"
-                                     From="0" To="1" BeginTime="0:0:1.6" Duration="0:0:0.5"/>
-                    <DoubleAnimation Storyboard.TargetName="GetIpButton"
-                                     Storyboard.TargetProperty="Opacity"
-                                     From="0" To="1" BeginTime="0:0:1.7" Duration="0:0:0.5"/>
-                    <DoubleAnimation Storyboard.TargetName="SaveIpButton"
-                                     Storyboard.TargetProperty="Opacity"
-                                     From="0" To="1" BeginTime="0:0:1.8" Duration="0:0:0.5"/>
-
                     <!-- 按钮区动画 -->
                     <DoubleAnimation Storyboard.TargetName="StartButton"
                                      Storyboard.TargetProperty="Opacity"
@@ -68,38 +54,7 @@
                    Opacity="0"
                    Margin="0,0,0,12"/>
 
-        <!-- IP 设置区 -->
-        <Grid Grid.Row="1" Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
 
-            <TextBlock x:Name="IpLabel"
-                       Text="服务器地址："
-                       VerticalAlignment="Center"
-                       Margin="0,0,4,0"
-                       Opacity="0"/>
-            <TextBox x:Name="IpTextBox"
-                     Grid.Column="1"
-                     VerticalContentAlignment="Center"
-                     ToolTip="输入裸 IP 或域名，如 192.168.1.100 或 example.com"
-                     Opacity="0"
-                     TextChanged="IpTextBox_TextChanged"/>
-            <Button x:Name="GetIpButton"
-                    Grid.Column="2"
-                    Content="获取本机IP"
-                    Margin="4,0"
-                    Click="GetIpButton_Click"
-                    Opacity="0"/>
-            <Button x:Name="SaveIpButton"
-                    Grid.Column="3"
-                    Content="保存"
-                    Click="SaveIpButton_Click"
-                    Opacity="0"/>
-        </Grid>
 
         <!-- 日志区 -->
         <Grid Grid.Row="2" Margin="0,4">
@@ -130,20 +85,16 @@
         </Grid>
 
         <!-- 按钮区 -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
-            <Button x:Name="StartButton"
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+        <Button x:Name="StartButton"
                     Content="一键开服"
-                    Width="120"
-                    Height="40"
                     Opacity="0"
                     Click="StartButton_Click"
-                    Margin="0,0,8,0"/>
-            <Button x:Name="StopButton"
+                    Margin="314,2,434,0"
+                    />
+        <Button x:Name="StopButton"
                     Content="一键停服"
-                    Width="120"
-                    Height="40"
                     Opacity="0"
-                    Click="StopButton_Click"/>
-        </StackPanel>
+                    Click="StopButton_Click" Margin="434,2,314,0"/>
     </Grid>
 </Window>
