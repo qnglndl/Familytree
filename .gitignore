@@ -1,5 +1,8 @@
 ./server/.env
-./Familytree_gui/.vs/
-./Familytree_gui/bin/
-./Familytree_gui/obj/
+./Connect_to_server_gui/bin/
+./Connect_to_server_gui/obj/
+./Connect_to_server_gui/.vs/
+./Familytree_local_test_gui/bin/
+./Familytree_local_test_gui/obj/
+./Familytree_local_test_gui/.vs/
 ./client/server_ip.txt

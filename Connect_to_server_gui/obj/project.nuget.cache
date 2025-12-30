@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "g/JQAuCswK4=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\khy\\Desktop\\Familytree\\Connect_to_server_gui\\Connect_to_server_gui.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\khy\\.nuget\\packages\\bouncycastle.cryptography\\2.6.2\\bouncycastle.cryptography.2.6.2.nupkg.sha512",
+    "C:\\Users\\khy\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "C:\\Users\\khy\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.3\\microsoft.extensions.logging.abstractions.8.0.3.nupkg.sha512",
+    "C:\\Users\\khy\\.nuget\\packages\\ssh.net\\2025.1.0\\ssh.net.2025.1.0.nupkg.sha512"
+  ],
+  "logs": []
+}

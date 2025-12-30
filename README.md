@@ -169,6 +169,6 @@ deactivate
 发送post请求去后台，用于注册
 
 # 后记
-制作人员名单：孔焕彬(server)、孔思勋(client)  
-至于为啥所有文件里的作者同一个人，那规范文件的不就是一个人吗  
+制作人员名单：孔焕彬(server)、孔思勋(client、Familytree_local_test_gui、Connect_to_server_gui)  
+至于为啥所有文件里的作者同一个人，那规范文件的就是一个人 
 做这玩意要死要活的＞﹏＜我太难了/(ㄒoㄒ)/~~
