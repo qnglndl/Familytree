@@ -1,0 +1,1506 @@
+﻿using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Threading.Tasks;
+using Microsoft.Win32;
+
+// SSH.NET 引用
+using Renci.SshNet;
+using Renci.SshNet.Common;
+
+namespace Connect_to_server_gui
+{
+    public partial class MainWindow : Window
+    {
+        private bool isConnecting = false;
+        private string selectedKeyFilePath = "";
+        private SshClient sshClient;
+        private string currentUsername = "";
+        private string currentHostname = "";
+        private int currentPort = 22;
+        private string currentOsType = "linux"; // linux, windows, mac
+        private string selectedFolderPath = "";
+        private string currentBrowserPath = "/";
+        private bool controlsInitialized = false;
+        private string rootPath = "/"; // 根据操作系统变化的根目录
+
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            // 设置初始状态
+            NoAuthRadio.IsChecked = true;
+            PasswordInput.IsEnabled = false;
+            KeySelectButton.IsEnabled = false;
+            ServerIpInput.Foreground = Brushes.Gray;
+
+            // 在 Loaded 事件中绑定事件，确保控件已初始化
+            Loaded += MainWindow_Loaded;
+
+            // 立即开始启动动画
+            StartWelcomeAnimation();
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            // 绑定事件
+            AttachEvents();
+            controlsInitialized = true;
+        }
+
+        private void AttachEvents()
+        {
+            ServerIpInput.GotFocus += ServerIpInput_GotFocus;
+            ServerIpInput.LostFocus += ServerIpInput_LostFocus;
+            NoAuthRadio.Checked += AuthenticationMethod_Changed;
+            PasswordRadio.Checked += AuthenticationMethod_Changed;
+            KeyRadio.Checked += AuthenticationMethod_Changed;
+            KeySelectButton.Click += KeySelectButton_Click;
+            ConnectButton.Click += ConnectButton_Click;
+
+            // 操作系统选择事件
+            if (LinuxRadio != null) LinuxRadio.Checked += OsRadio_Checked;
+            if (WindowsRadio != null) WindowsRadio.Checked += OsRadio_Checked;
+            if (MacRadio != null) MacRadio.Checked += OsRadio_Checked;
+
+            // 文件夹选择方式事件
+            if (ManualInputRadio != null) ManualInputRadio.Checked += SelectionMethod_Changed;
+            if (BrowseServerRadio != null) BrowseServerRadio.Checked += SelectionMethod_Changed;
+            if (SuggestedPathRadio != null) SuggestedPathRadio.Checked += SelectionMethod_Changed;
+
+            // 按钮事件
+            if (BrowseButton != null) BrowseButton.Click += BrowseButton_Click;
+            if (ValidatePathButton != null) ValidatePathButton.Click += ValidatePathButton_Click;
+            if (CreateFolderButton != null) CreateFolderButton.Click += CreateFolderButton_Click;
+            if (ContinueButton != null) ContinueButton.Click += ContinueButton_Click;
+
+            // 目录浏览器事件
+            if (GoUpButton != null) GoUpButton.Click += GoUpButton_Click;
+            if (SelectFolderButton != null) SelectFolderButton.Click += SelectFolderButton_Click;
+            if (CancelBrowseButton != null) CancelBrowseButton.Click += CancelBrowseButton_Click;
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+
+            // 清理SSH连接
+            sshClient?.Disconnect();
+            sshClient?.Dispose();
+
+            // 强制停止所有动画
+            ForceHideLoading();
+        }
+
+        private async void StartWelcomeAnimation()
+        {
+            try
+            {
+                // 欢迎文字淡入
+                var welcomeFadeIn = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromSeconds(1)
+                };
+                WelcomeText.BeginAnimation(UIElement.OpacityProperty, welcomeFadeIn);
+
+                await Task.Delay(2000);
+
+                // 欢迎文字淡出
+                var welcomeFadeOut = new DoubleAnimation
+                {
+                    From = 1,
+                    To = 0,
+                    Duration = TimeSpan.FromSeconds(0.5)
+                };
+                WelcomeText.BeginAnimation(UIElement.OpacityProperty, welcomeFadeOut);
+
+                await Task.Delay(500);
+
+                // 显示连接面板
+                var panelFadeIn = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromSeconds(0.5)
+                };
+                ConnectionPanel.BeginAnimation(UIElement.OpacityProperty, panelFadeIn);
+            }
+            catch (Exception ex)
+            {
+                // 动画异常，通常可以忽略
+                System.Diagnostics.Debug.WriteLine($"动画异常: {ex.Message}");
+            }
+        }
+
+        private void ServerIpInput_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (ServerIpInput.Text == "用户名@服务器IP")
+            {
+                ServerIpInput.Text = "";
+                ServerIpInput.Foreground = Brushes.Black;
+            }
+        }
+
+        private void ServerIpInput_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(ServerIpInput.Text))
+            {
+                ServerIpInput.Text = "用户名@服务器IP";
+                ServerIpInput.Foreground = Brushes.Gray;
+            }
+        }
+
+        private void AuthenticationMethod_Changed(object sender, RoutedEventArgs e)
+        {
+            if (PasswordInput != null && KeySelectButton != null)
+            {
+                PasswordInput.IsEnabled = PasswordRadio.IsChecked == true;
+                KeySelectButton.IsEnabled = KeyRadio.IsChecked == true;
+            }
+        }
+
+        private void OsRadio_Checked(object sender, RoutedEventArgs e)
+        {
+            if (!controlsInitialized) return;
+
+            if (LinuxRadio.IsChecked == true)
+            {
+                currentOsType = "linux";
+                rootPath = "/";
+            }
+            else if (WindowsRadio.IsChecked == true)
+            {
+                currentOsType = "windows";
+                rootPath = "C:\\";
+                // 或者根据实际情况，Windows SSH服务器可能使用：
+                // rootPath = "/cygdrive/c/";
+                // rootPath = "C:/";
+            }
+            else if (MacRadio.IsChecked == true)
+            {
+                currentOsType = "mac";
+                rootPath = "/";
+            }
+
+            UpdateSuggestedPaths();
+
+            // 重置浏览路径到根目录
+            currentBrowserPath = rootPath;
+        }
+
+        private void SelectionMethod_Changed(object sender, RoutedEventArgs e)
+        {
+            if (!controlsInitialized) return;
+
+            // 添加空值检查
+            if (ManualPathInput == null || BrowseButton == null ||
+                CurrentPathInput == null)
+                return;
+
+            bool isManual = ManualInputRadio != null && ManualInputRadio.IsChecked == true;
+            bool isBrowse = BrowseServerRadio != null && BrowseServerRadio.IsChecked == true;
+
+            ManualPathInput.IsEnabled = isManual;
+            if (BrowseButton != null) BrowseButton.IsEnabled = isBrowse;
+            if (CurrentPathInput != null) CurrentPathInput.IsEnabled = isBrowse;
+        }
+
+        private void KeySelectButton_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "密钥文件 (*.pem;*.ppk)|*.pem;*.ppk|所有文件 (*.*)|*.*",
+                Title = "选择SSH密钥文件",
+                Multiselect = false
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                selectedKeyFilePath = openFileDialog.FileName;
+                KeyFilePathText.Text = Path.GetFileName(selectedKeyFilePath);
+                KeyFilePathText.ToolTip = selectedKeyFilePath;
+            }
+        }
+
+        private void UpdateSuggestedPaths()
+        {
+            if (SuggestedPathsPanel == null || string.IsNullOrEmpty(currentUsername))
+                return;
+
+            SuggestedPathsPanel.Children.Clear();
+
+            List<string> paths = new List<string>();
+
+            if (currentOsType == "linux" || currentOsType == "mac")
+            {
+                // Unix-like 系统路径
+                paths.Add($"/home/{currentUsername}/Familytree");
+                paths.Add($"/home/{currentUsername}/Documents/Familytree");
+                paths.Add($"/var/www/Familytree");
+                paths.Add($"/opt/Familytree");
+                paths.Add($"~/Familytree");
+            }
+            else if (currentOsType == "windows")
+            {
+                // Windows 系统路径（通过 SSH 访问 Windows 通常使用 Cygwin/MSYS）
+                // 提供多种可能的路径格式
+                paths.Add($"C:\\Users\\{currentUsername}\\Familytree");
+                paths.Add($"C:\\Familytree");
+                paths.Add($"D:\\Familytree");
+                paths.Add($"E:\\Familytree");
+                paths.Add($"/cygdrive/c/Users/{currentUsername}/Familytree");
+                paths.Add($"/cygdrive/c/Familytree");
+                paths.Add($"C:/Users/{currentUsername}/Familytree");
+                paths.Add($"C:/Familytree");
+            }
+
+            foreach (var path in paths)
+            {
+                var radioButton = new RadioButton
+                {
+                    Content = path,
+                    FontSize = 13,
+                    Margin = new Thickness(0, 0, 0, 5),
+                    Tag = path
+                };
+                radioButton.Checked += SuggestedPath_Checked;
+                SuggestedPathsPanel.Children.Add(radioButton);
+            }
+        }
+
+        private void SuggestedPath_Checked(object sender, RoutedEventArgs e)
+        {
+            if (!controlsInitialized) return;
+
+            if (sender is RadioButton radio && radio.Tag is string path)
+            {
+                if (ManualPathInput != null)
+                    ManualPathInput.Text = path;
+
+                if (SuggestedPathRadio != null)
+                    SuggestedPathRadio.IsChecked = true;
+            }
+        }
+
+        private async void ConnectButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (isConnecting) return;
+
+            try
+            {
+                // 验证输入
+                var serverInput = ServerIpInput.Text.Trim();
+                if (serverInput == "用户名@服务器IP" || string.IsNullOrWhiteSpace(serverInput))
+                {
+                    ShowError("请输入服务器地址！");
+                    ServerIpInput.Focus();
+                    return;
+                }
+
+                if (!serverInput.Contains('@'))
+                {
+                    ShowError("请输入正确的格式：用户名@服务器IP");
+                    ServerIpInput.Focus();
+                    return;
+                }
+
+                // 解析用户名和主机名
+                var parts = serverInput.Split('@');
+                currentUsername = parts[0];
+                currentHostname = parts[1];
+
+                // 解析端口
+                if (!int.TryParse(PortInput.Text.Trim(), out currentPort))
+                {
+                    currentPort = 22;
+                }
+
+                if (currentPort <= 0 || currentPort > 65535)
+                {
+                    ShowError("请输入有效的端口号（1-65535）！");
+                    PortInput.Focus();
+                    return;
+                }
+
+                // 验证认证方式
+                if (PasswordRadio.IsChecked == true && string.IsNullOrEmpty(PasswordInput.Password))
+                {
+                    ShowError("请输入密码！");
+                    PasswordInput.Focus();
+                    return;
+                }
+
+                if (KeyRadio.IsChecked == true && (string.IsNullOrEmpty(selectedKeyFilePath) || !File.Exists(selectedKeyFilePath)))
+                {
+                    ShowError("请选择有效的密钥文件！");
+                    return;
+                }
+
+                // 开始连接
+                isConnecting = true;
+                await ShowLoading(true, "正在连接服务器...");
+
+                bool success = false;
+                string message = "";
+                SshClient client = null;
+
+                if (NoAuthRadio.IsChecked == true)
+                {
+                    (success, message, client) = await ConnectWithNoAuth(currentHostname, currentPort, currentUsername);
+                }
+                else if (PasswordRadio.IsChecked == true)
+                {
+                    (success, message, client) = await ConnectWithPassword(currentHostname, currentPort, currentUsername, PasswordInput.Password);
+                }
+                else if (KeyRadio.IsChecked == true)
+                {
+                    (success, message, client) = await ConnectWithKey(currentHostname, currentPort, currentUsername, selectedKeyFilePath);
+                }
+
+                if (success)
+                {
+                    sshClient = client;
+
+                    // 先关闭加载动画
+                    await ShowLoading(false);
+
+                    // 检测操作系统类型
+                    await DetectOperatingSystem();
+
+                    // 连接成功，淡出连接面板，显示文件夹选择面板
+                    await TransitionToFolderSelection(message);
+                }
+                else
+                {
+                    await ShowLoading(false);
+                    ShowError(message);
+
+                    // 释放失败的客户端
+                    client?.Disconnect();
+                    client?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowLoading(false);
+                ShowError($"连接异常：{ex.Message}");
+
+                // 清理资源
+                sshClient?.Disconnect();
+                sshClient?.Dispose();
+                sshClient = null;
+            }
+            finally
+            {
+                isConnecting = false;
+            }
+        }
+
+        private async Task DetectOperatingSystem()
+        {
+            try
+            {
+                // 尝试检测操作系统
+                var unameCmd = await ExecuteSshCommand("uname -s 2>/dev/null || echo 'UNKNOWN'");
+                var uname = unameCmd.Trim().ToUpper();
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (uname.Contains("LINUX"))
+                    {
+                        currentOsType = "linux";
+                        rootPath = "/";
+                        if (LinuxRadio != null) LinuxRadio.IsChecked = true;
+                    }
+                    else if (uname.Contains("DARWIN") || uname.Contains("MAC"))
+                    {
+                        currentOsType = "mac";
+                        rootPath = "/";
+                        if (MacRadio != null) MacRadio.IsChecked = true;
+                    }
+                    else
+                    {
+                        // 认为是 Windows（uname 不存在或返回 UNKNOWN）
+                        currentOsType = "windows";
+                        rootPath = "C:\\";
+                        if (WindowsRadio != null) WindowsRadio.IsChecked = true;
+                    }
+
+                    // 重置浏览路径
+                    currentBrowserPath = rootPath;
+                    UpdateSuggestedPaths();
+                });
+            }
+            catch
+            {
+                // 如果检测失败，保持用户选择
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    UpdateSuggestedPaths();
+                });
+            }
+        }
+
+        private async Task TransitionToFolderSelection(string connectionMessage)
+        {
+            // 确保在 UI 线程执行
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    // 1. 淡出连接面板
+                    var fadeOut = new DoubleAnimation
+                    {
+                        From = 1,
+                        To = 0,
+                        Duration = TimeSpan.FromSeconds(0.5),
+                        FillBehavior = FillBehavior.HoldEnd
+                    };
+
+                    var fadeOutCompleted = new TaskCompletionSource<bool>();
+                    fadeOut.Completed += (s, e) => fadeOutCompleted.TrySetResult(true);
+
+                    ConnectionPanel.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                    await fadeOutCompleted.Task;
+
+                    // 2. 显示服务器信息
+                    if (ServerInfoText != null)
+                        ServerInfoText.Text = connectionMessage;
+
+                    // 3. 昿示文件夹选择面板
+                    if (FolderPanel != null)
+                    {
+                        // 设置初始透明度为0
+                        FolderPanel.Opacity = 0;
+                        FolderPanel.Visibility = Visibility.Visible;
+
+                        var fadeIn = new DoubleAnimation
+                        {
+                            From = 0,
+                            To = 1,
+                            Duration = TimeSpan.FromSeconds(0.5),
+                            FillBehavior = FillBehavior.HoldEnd
+                        };
+
+                        FolderPanel.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                    }
+
+                    // 4. 立即启用控件
+                    EnableAllControls();
+                }
+                catch (Exception ex)
+                {
+                    ShowError($"界面切换失败: {ex.Message}");
+                }
+            });
+        }
+
+        private async void BrowseButton_Click(object sender, RoutedEventArgs e)
+        {
+            // 显式请求列出驱动器（仅由浏览按钮触发）
+            await ShowDirectoryBrowser(rootPath, true);
+        }
+
+        private async Task ShowDirectoryBrowser(string initialPath, bool listDrives = false)
+        {
+            try
+            {
+                await ShowLoading(true, "正在加载目录...");
+
+                currentBrowserPath = NormalizePath(initialPath);
+                if (BrowserPathInput != null)
+                    BrowserPathInput.Text = currentBrowserPath;
+
+                // 加载目录内容
+                await LoadDirectoryContents(currentBrowserPath, listDrives);
+
+                // 显示浏览器窗口
+                if (DirectoryBrowserGrid != null)
+                {
+                    DirectoryBrowserGrid.Visibility = Visibility.Visible;
+                    var fadeIn = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromSeconds(0.3),
+                        FillBehavior = FillBehavior.HoldEnd
+                    };
+
+                    DirectoryBrowserGrid.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError($"加载目录失败: {ex.Message}");
+            }
+            finally
+            {
+                await ShowLoading(false);
+            }
+        }
+
+        private async Task LoadDirectoryContents(string path, bool forceListDrives = false)
+        {
+            if (BrowserDirectoryListPanel == null) return;
+
+            await Dispatcher.InvokeAsync(() =>
+            {
+                BrowserDirectoryListPanel.Children.Clear();
+            });
+
+            try
+            {
+                string listCommand = "";
+                string result = "";
+
+                if (currentOsType == "windows")
+                {
+                    // Windows系统
+                    // 只有在显式要求列出驱动器（如点击“浏览”按钮）时才显示所有驱动器
+                    if (forceListDrives)
+                    {
+                        // 根目录：尝试多种方式列出驱动器，按优先级：PowerShell -> wmic -> cmd 探测
+                        // 1) PowerShell（优先）
+                        try
+                        {
+                            result = await ExecuteSshCommand("powershell -NoProfile -Command \"Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }\" 2>$null");
+                        }
+                        catch
+                        {
+                            result = "";
+                        }
+
+                        // 2) 回退到 wmic（有的系统没有 PowerShell）
+                        if (string.IsNullOrWhiteSpace(result))
+                        {
+                            try
+                            {
+                                result = await ExecuteSshCommand("wmic logicaldisk where drivetype=3 get caption 2>nul | findstr /r \"^[A-Z]:\"");
+                            }
+                            catch
+                            {
+                                result = "";
+                            }
+                        }
+
+                        // 3) 再回退到 cmd 循环探测（最大兼容）
+                        if (string.IsNullOrWhiteSpace(result))
+                        {
+                            try
+                            {
+                                // cmd /c for %D in (...) do @if exist %D:\\ echo %D:
+                                result = await ExecuteSshCommand("cmd /c for %D in (C D E F G H I J K L M N O P Q R S T U V W X Y Z) do @if exist %D:\\ echo %D:");
+                            }
+                            catch
+                            {
+                                result = "";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // 普通目录：显示子目录
+                        // 优先使用 PowerShell 获取目录名（更稳定），回退到 dir
+                        try
+                        {
+                            var psCmd = $"powershell -NoProfile -Command \"Get-ChildItem -Directory -Name -Path '{path}'\" 2>$null";
+                            result = await ExecuteSshCommand(psCmd);
+                        }
+                        catch
+                        {
+                            result = "";
+                        }
+
+                        if (string.IsNullOrWhiteSpace(result))
+                        {
+                            listCommand = $"dir \"{path}\" /A:D /B 2>nul";
+                            result = await ExecuteSshCommand(listCommand);
+                        }
+                    }
+                }
+                else
+                {
+                    // Unix-like 系统
+                    listCommand = $"ls -la \"{path}\" 2>/dev/null";
+                    result = await ExecuteSshCommand(listCommand);
+                }
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (string.IsNullOrWhiteSpace(result))
+                    {
+                        // 如果没有结果，显示提示
+                        var textBlock = new TextBlock
+                        {
+                            Text = currentOsType == "windows" && forceListDrives ? 
+                                   "未找到可用驱动器" : "目录为空",
+                            Foreground = Brushes.Gray,
+                            Margin = new Thickness(10)
+                        };
+                        BrowserDirectoryListPanel.Children.Add(textBlock);
+                        return;
+                    }
+
+                    if (currentOsType == "windows" && forceListDrives)
+                    {
+                        // Windows根目录 - 显示驱动器列表
+                        var lines = result.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        // 添加默认的C:驱动器（即使命令失败）
+                        if (lines.Length == 0)
+                        {
+                            var defaultDrive = CreateDirectoryItem("C:\\", "", true);
+                            BrowserDirectoryListPanel.Children.Add(defaultDrive);
+                        }
+
+                        foreach (var raw in lines)
+                        {
+                            var driveLine = raw.Trim();
+                            if (string.IsNullOrWhiteSpace(driveLine))
+                                continue;
+
+                            // 可能的输出格式："C:\\", "C:", "C:" 或 "C"
+                            char? letter = null;
+                            for (int i = 0; i < driveLine.Length; i++)
+                            {
+                                if (char.IsLetter(driveLine[i]))
+                                {
+                                    letter = char.ToUpper(driveLine[i]);
+                                    break;
+                                }
+                            }
+
+                            if (letter.HasValue)
+                            {
+                                var drive = $"{letter.Value}:\\";
+
+                                // 跳过返回等于当前路径本身的条目（例如在某些环境下会返回 "C:\"）
+                                if (string.Equals(drive.TrimEnd('\\'), path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                var itemPanel = CreateDirectoryItem(drive, "", true);
+                                BrowserDirectoryListPanel.Children.Add(itemPanel);
+                            }
+                        }
+                    }
+                    else if (currentOsType == "windows")
+                    {
+                        // Windows普通目录（dir 或 PowerShell 输出为目录名列表）
+                        var lines = result.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var rawLine in lines)
+                        {
+                            var line = rawLine.Trim();
+                            if (string.IsNullOrWhiteSpace(line))
+                                continue;
+
+                            // 过滤可能的头部或多余信息
+                            if (line.StartsWith("Directory of", StringComparison.OrdinalIgnoreCase) ||
+                                line.StartsWith("Volume in drive", StringComparison.OrdinalIgnoreCase) ||
+                                line.StartsWith("卷", StringComparison.OrdinalIgnoreCase) ||
+                                line.StartsWith("目录", StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            string name = line;
+
+                            // 如果返回的是完整路径，如 C:\Folder 或 C:\Folder\\，提取最后一段
+                            if (name.Contains("\\") || name.Contains("/"))
+                            {
+                                try
+                                {
+                                    name = System.IO.Path.GetFileName(name.TrimEnd('\\', '/'));
+                                }
+                                catch
+                                {
+                                    // 忽略解析错误，保留原值
+                                }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(name))
+                                continue;
+
+                            // 跳过返回等于当前路径本身的条目（例如在某些环境下会返回 "C:\"）
+                            try
+                            {
+                                var candidateNorm = name.Trim().TrimEnd('\\', '/');
+                                var pathNorm = path.Replace('/', '\\').TrimEnd('\\', '/');
+                                if (string.Equals(candidateNorm, pathNorm, StringComparison.OrdinalIgnoreCase))
+                                    continue;
+                            }
+                            catch
+                            {
+                                // 忽略比较错误
+                            }
+
+                            // 添加目录斜杠
+                            if (!name.EndsWith("\\"))
+                            {
+                                name += "\\";
+                            }
+
+                            var itemPanel = CreateDirectoryItem(name, path, true);
+                            BrowserDirectoryListPanel.Children.Add(itemPanel);
+                        }
+                    }
+                    else
+                    {
+                        // Unix系统目录（ls -la）
+                        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                        foreach (var line in lines)
+                        {
+                            if (line.StartsWith("total") || line.StartsWith(".") || string.IsNullOrWhiteSpace(line))
+                                continue;
+
+                            var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 9)
+                            {
+                                var isDirectory = parts[0].StartsWith("d");
+                                var name = string.Join(" ", parts, 8, parts.Length - 8);
+
+                                if (name == "." || name == "..")
+                                    continue;
+
+                                var itemPanel = CreateDirectoryItem(name, path, isDirectory);
+                                BrowserDirectoryListPanel.Children.Add(itemPanel);
+                            }
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    var textBlock = new TextBlock
+                    {
+                        Text = $"加载失败: {ex.Message}",
+                        Foreground = Brushes.Red,
+                        Margin = new Thickness(10)
+                    };
+                    BrowserDirectoryListPanel.Children.Add(textBlock);
+                });
+            }
+        }
+
+        private StackPanel CreateDirectoryItem(string name, string currentPath, bool isDirectory)
+        {
+            var itemPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(5),
+                Cursor = isDirectory ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow
+            };
+
+            string fullPath;
+            if (currentOsType == "windows")
+            {
+                // 如果是根目录下的驱动器
+                if (string.IsNullOrEmpty(currentPath) && name.EndsWith("\\"))
+                {
+                    fullPath = name; // 例如: C:\
+                }
+                else if (!string.IsNullOrEmpty(currentPath) && currentPath.EndsWith("\\"))
+                {
+                    fullPath = currentPath + name;
+                }
+                else if (!string.IsNullOrEmpty(currentPath))
+                {
+                    fullPath = currentPath + "\\" + name;
+                }
+                else
+                {
+                    fullPath = name;
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(currentPath) && currentPath.EndsWith("/"))
+                    fullPath = currentPath + name;
+                else if (!string.IsNullOrEmpty(currentPath))
+                    fullPath = currentPath + "/" + name;
+                else
+                    fullPath = name;
+            }
+
+            itemPanel.Tag = fullPath;
+
+            var icon = new TextBlock
+            {
+                Text = isDirectory ? "📁" : "📄",
+                FontSize = 16,
+                Margin = new Thickness(0, 0, 10, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var nameText = new TextBlock
+            {
+                Text = name,
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            itemPanel.Children.Add(icon);
+            itemPanel.Children.Add(nameText);
+
+            if (isDirectory)
+            {
+                itemPanel.MouseLeftButtonDown += async (s, ev) =>
+                {
+                    // 点击目录时，正常展示该目录下内容（不强制列出驱动器）
+                    await ShowDirectoryBrowser(fullPath, false);
+                };
+            }
+
+            return itemPanel;
+        }
+
+        private async void GoUpButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (IsWindowsRootPath(currentBrowserPath))
+            {
+                // 已经是Windows根目录，无需返回
+                return;
+            }
+
+            if (currentBrowserPath == rootPath)
+                return;
+
+            try
+            {
+                string parentPath = "";
+                if (currentOsType == "windows")
+                {
+                    // Windows路径：C:\Users\Username -> C:\Users
+                    parentPath = Path.GetDirectoryName(currentBrowserPath);
+                    if (string.IsNullOrEmpty(parentPath))
+                        parentPath = rootPath;
+
+                    // 如果是C:\Users这样的路径，父目录应该是C:\_
+                    if (parentPath.Length == 2 && parentPath[1] == ':')
+                    {
+                        parentPath += "\\";
+                    }
+                }
+                else
+                {
+                    // Unix路径：/home/username -> /home
+                    parentPath = Path.GetDirectoryName(currentBrowserPath);
+                    if (string.IsNullOrEmpty(parentPath))
+                        parentPath = "/";
+                }
+
+                await ShowDirectoryBrowser(parentPath);
+            }
+            catch (Exception ex)
+            {
+                ShowError($"无法返回上级目录: {ex.Message}");
+            }
+        }
+
+        private void SelectFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ManualPathInput != null && BrowserPathInput != null)
+                ManualPathInput.Text = BrowserPathInput.Text;
+
+            if (ManualInputRadio != null)
+                ManualInputRadio.IsChecked = true;
+
+            CloseDirectoryBrowser();
+        }
+
+        private void CancelBrowseButton_Click(object sender, RoutedEventArgs e)
+        {
+            CloseDirectoryBrowser();
+        }
+
+        private void CloseDirectoryBrowser()
+        {
+            if (DirectoryBrowserGrid == null) return;
+
+            var fadeOut = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromSeconds(0.3)
+            };
+
+            fadeOut.Completed += (s, e) =>
+            {
+                DirectoryBrowserGrid.Visibility = Visibility.Collapsed;
+            };
+
+            DirectoryBrowserGrid.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+        }
+
+        private async void ValidatePathButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ManualPathInput == null) return;
+
+            var path = ManualPathInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowError("请输入文件夹路径！");
+                return;
+            }
+
+            try
+            {
+                await ShowLoading(true, "正在验证路径...");
+
+                // 标准化路径
+                var normalizedPath = NormalizePath(path);
+
+                // 检查路径是否存在
+                string checkCommand;
+                if (currentOsType == "windows")
+                {
+                    checkCommand = $"if exist \"{normalizedPath}\" (echo EXISTS) else (echo NOT_EXISTS)";
+                }
+                else
+                {
+                    checkCommand = $"[ -d \"{normalizedPath}\" ] && echo \"EXISTS\" || echo \"NOT_EXISTS\"";
+                }
+
+                var result = await ExecuteSshCommand(checkCommand);
+
+                if (result.Trim() == "EXISTS")
+                {
+                    // 检查是否是文件夹
+                    string typeCommand;
+                    if (currentOsType == "windows")
+                    {
+                        typeCommand = $"if exist \"{normalizedPath}\\\\*\" (echo DIRECTORY) else (echo FILE)";
+                    }
+                    else
+                    {
+                        typeCommand = $"[ -d \"{normalizedPath}\" ] && echo \"DIRECTORY\" || echo \"FILE\"";
+                    }
+
+                    var typeResult = await ExecuteSshCommand(typeCommand);
+
+                    if (typeResult.Trim() == "DIRECTORY")
+                    {
+                        // 检查文件夹权限
+                        string permCommand;
+                        if (currentOsType == "windows")
+                        {
+                            permCommand = $"icacls \"{normalizedPath}\" 2>/dev/null || echo '权限检查失败'";
+                        }
+                        else
+                        {
+                            permCommand = $"ls -ld \"{normalizedPath}\" | awk '{{print $1}}' 2>/dev/null || echo '权限检查失败'";
+                        }
+
+                        var permResult = await ExecuteSshCommand(permCommand);
+
+                        selectedFolderPath = normalizedPath;
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            ShowValidationResult(true,
+                                $"✅ 路径验证成功\n\n" +
+                                $"📁 路径: {normalizedPath}\n" +
+                                $"🔧 类型: 文件夹\n" +
+                                $"🔐 权限: {permResult.Trim()}\n" +
+                                $"💡 状态: 可以正常使用");
+
+                            if (ContinueButton != null)
+                                ContinueButton.IsEnabled = true;
+                        });
+                    }
+                    else
+                    {
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            ShowValidationResult(false, $"❌ 路径不是文件夹\n\n{normalizedPath} 是一个文件，请选择文件夹路径");
+                            if (ContinueButton != null)
+                                ContinueButton.IsEnabled = false;
+                        });
+                    }
+                }
+                else
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        ShowValidationResult(false, $"❌ 文件夹不存在\n\n路径 {normalizedPath} 不存在，请检查路径或创建文件夹");
+                        if (ContinueButton != null)
+                            ContinueButton.IsEnabled = false;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ShowValidationResult(false, $"❌ 验证失败\n\n{ex.Message}");
+                    if (ContinueButton != null)
+                        ContinueButton.IsEnabled = false;
+                });
+            }
+            finally
+            {
+                await ShowLoading(false);
+            }
+        }
+
+        private async void CreateFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ManualPathInput == null) return;
+
+            var path = ManualPathInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                ShowError("请输入文件夹路径！");
+                return;
+            }
+
+            try
+            {
+                await ShowLoading(true, "正在创建文件夹...");
+
+                // 标准化路径
+                var normalizedPath = NormalizePath(path);
+
+                string createCommand;
+                if (currentOsType == "windows")
+                {
+                    createCommand = $"mkdir \"{normalizedPath}\" 2>nul";
+                }
+                else
+                {
+                    createCommand = $"mkdir -p \"{normalizedPath}\"";
+                }
+
+                await ExecuteSshCommand(createCommand);
+
+                // 设置权限
+                string permCommand;
+                if (currentOsType == "windows")
+                {
+                    permCommand = $"icacls \"{normalizedPath}\" /grant {currentUsername}:(OI)(CI)F 2>nul || echo '权限设置完成'";
+                }
+                else
+                {
+                    permCommand = $"chmod 755 \"{normalizedPath}\"";
+                }
+
+                await ExecuteSshCommand(permCommand);
+
+                selectedFolderPath = normalizedPath;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ShowValidationResult(true,
+                        $"✅ 文件夹创建成功\n\n" +
+                        $"📁 路径: {normalizedPath}\n" +
+                        $"👤 所有者: {currentUsername}\n" +
+                        $"🔧 权限: 755 (Unix) / 完全控制 (Windows)\n" +
+                        $"💡 状态: 可以正常使用");
+
+                    if (ContinueButton != null)
+                        ContinueButton.IsEnabled = true;
+                });
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    ShowValidationResult(false, $"❌ 创建文件夹失败\n\n{ex.Message}");
+                    if (ContinueButton != null)
+                        ContinueButton.IsEnabled = false;
+                });
+            }
+            finally
+            {
+                await ShowLoading(false);
+            }
+        }
+
+        private void ContinueButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(selectedFolderPath))
+            {
+                ShowError("请先验证或选择文件夹路径！");
+                return;
+            }
+
+            MessageBox.Show(
+                $"🎉 准备进入族谱系统\n\n" +
+                $"🔗 服务器: {currentHostname}:{currentPort}\n" +
+                $"👤 用户: {currentUsername}\n" +
+                $"💻 系统: {currentOsType.ToUpper()}\n" +
+                $"📁 族谱文件夹: {selectedFolderPath}\n\n" +
+                $"系统将使用此文件夹存储族谱数据。",
+                "准备就绪",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            // 这里可以打开新的族谱管理窗口
+            // 传递参数：sshClient, selectedFolderPath, currentOsType
+            // var familyTreeWindow = new FamilyTreeWindow(sshClient, selectedFolderPath, currentOsType);
+            // familyTreeWindow.Show();
+            // this.Close();
+
+            // 暂时关闭SSH连接
+            sshClient?.Disconnect();
+            sshClient?.Dispose();
+        }
+
+        private void ShowValidationResult(bool success, string message)
+        {
+            if (ValidationResultBorder == null || ValidationResultTitle == null || ValidationResultText == null)
+                return;
+
+            ValidationResultBorder.Visibility = Visibility.Visible;
+            ValidationResultTitle.Text = success ? "✅ 路径有效" : "❌ 路径无效";
+            ValidationResultTitle.Foreground = success ?
+                new SolidColorBrush(Color.FromRgb(46, 125, 50)) :
+                new SolidColorBrush(Color.FromRgb(211, 47, 47));
+            ValidationResultText.Text = message;
+        }
+
+        // SSH连接方法
+        private async Task<(bool success, string message, SshClient client)> ConnectWithNoAuth(string hostname, int port, string username)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    var client = new SshClient(hostname, port, username, "");
+                    client.Connect();
+
+                    if (client.IsConnected)
+                    {
+                        var hostnameCmd = client.RunCommand("hostname");
+                        var whoamiCmd = client.RunCommand("whoami");
+
+                        var message = $"✅ 连接成功\n\n" +
+                                     $"🔗 服务器: {hostname}:{port}\n" +
+                                     $"👤 用户: {whoamiCmd.Result.Trim()}\n" +
+                                     $"🏠 主机名: {hostnameCmd.Result.Trim()}" ;
+
+                        return (true, message, client);
+                    }
+                    else
+                    {
+                        return (false, "❌ 连接失败：无法建立SSH连接", null);
+                    }
+                }
+                catch (SshAuthenticationException ex)
+                {
+                    return (false, $"❌ 认证失败：需要密码或密钥\n{ex.Message}", null);
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"❌ 连接失败：{ex.Message}", null);
+                }
+            });
+        }
+
+        private async Task<(bool success, string message, SshClient client)> ConnectWithPassword(string hostname, int port, string username, string password)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    var client = new SshClient(hostname, port, username, password);
+                    client.Connect();
+
+                    if (client.IsConnected)
+                    {
+                        var hostnameCmd = client.RunCommand("hostname");
+                        var whoamiCmd = client.RunCommand("whoami");
+
+                        var message = $"✅ 连接成功\n\n" +
+                                     $"🔗 服务器: {hostname}:{port}\n" +
+                                     $"👤 用户: {whoamiCmd.Result.Trim()}\n" +
+                                     $"🏠 主机名: {hostnameCmd.Result.Trim()}" ;
+
+                        return (true, message, client);
+                    }
+                    else
+                    {
+                        return (false, "❌ 连接失败：无法建立SSH连接", null);
+                    }
+                }
+                catch (SshAuthenticationException ex)
+                {
+                    return (false, $"❌ 认证失败：用户名或密码错误\n{ex.Message}", null);
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"❌ 连接失败：{ex.Message}", null);
+                }
+            });
+        }
+
+        private async Task<(bool success, string message, SshClient client)> ConnectWithKey(string hostname, int port, string username, string keyFilePath)
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    var keyFile = new PrivateKeyFile(keyFilePath);
+                    var keyFiles = new[] { keyFile };
+
+                    var connectionInfo = new ConnectionInfo(
+                        hostname,
+                        port,
+                        username,
+                        new PrivateKeyAuthenticationMethod(username, keyFiles)
+                    );
+
+                    var client = new SshClient(connectionInfo);
+                    client.Connect();
+
+                    if (client.IsConnected)
+                    {
+                        var hostnameCmd = client.RunCommand("hostname");
+                        var whoamiCmd = client.RunCommand("whoami");
+
+                        var message = $"✅ 连接成功\n\n" +
+                                     $"🔗 服务器: {hostname}:{port}\n" +
+                                     $"👤 用户: {whoamiCmd.Result.Trim()}\n" +
+                                     $"🏠 主机名: {hostnameCmd.Result.Trim()}\n" +
+                                     $"🗝️ 密钥文件: {Path.GetFileName(keyFilePath)}";
+
+                        return (true, message, client);
+                    }
+                    else
+                    {
+                        return (false, "❌ 连接失败：无法建立SSH连接", null);
+                    }
+                }
+                catch (SshAuthenticationException ex)
+                {
+                    return (false, $"❌ 认证失败：密钥文件无效或需要密码\n{ex.Message}", null);
+                }
+                catch (Exception ex)
+                {
+                    return (false, $"❌ 连接失败：{ex.Message}", null);
+                }
+            });
+        }
+
+        private async Task<string> ExecuteSshCommand(string command)
+        {
+            if (sshClient == null || !sshClient.IsConnected)
+            {
+                throw new Exception("SSH连接未建立");
+            }
+
+            return await Task.Run(() =>
+            {
+                var result = sshClient.RunCommand(command);
+                return result.Result;
+            });
+        }
+
+        private async Task ShowLoading(bool show, string text = "正在处理...")
+        {
+            if (LoadingGrid == null || LoadingText == null || LoadingRotate == null)
+                return;
+
+            // 使用 Dispatcher 确保在 UI 线程执行
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                if (show)
+                {
+                    LoadingText.Text = text;
+                    DisableAllControls();
+                    LoadingGrid.Visibility = Visibility.Visible;
+
+                    // 确保之前的动画停止
+                    LoadingGrid.BeginAnimation(UIElement.OpacityProperty, null);
+                    LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+
+                    // 淡入动画
+                    var fadeIn = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 1,
+                        Duration = TimeSpan.FromSeconds(0.3),
+                        FillBehavior = FillBehavior.HoldEnd
+                    };
+
+                    // 旋转动画
+                    var rotateAnimation = new DoubleAnimation
+                    {
+                        From = 0,
+                        To = 360,
+                        Duration = TimeSpan.FromSeconds(1),
+                        RepeatBehavior = RepeatBehavior.Forever
+                    };
+
+                    LoadingGrid.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                    LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, rotateAnimation);
+                }
+                else
+                {
+                    // 淡出动画
+                    var fadeOut = new DoubleAnimation
+                    {
+                        From = LoadingGrid.Opacity,
+                        To = 0,
+                        Duration = TimeSpan.FromSeconds(0.3),
+                        FillBehavior = FillBehavior.HoldEnd
+                    };
+
+                    // 使用 TaskCompletionSource 等待动画完成
+                    var tcs = new TaskCompletionSource<bool>();
+                    fadeOut.Completed += (s, e) =>
+                    {
+                        // 停止旋转动画
+                        LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+                        LoadingRotate.Angle = 0;
+
+                        // 隐藏加载网格
+                        LoadingGrid.Visibility = Visibility.Collapsed;
+                        LoadingGrid.Opacity = 0;
+
+                        // 重新启用控件
+                        EnableAllControls();
+                        tcs.TrySetResult(true);
+                    };
+
+                    // 开始淡出动画
+                    LoadingGrid.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+
+                    // 等待动画完成
+                    await tcs.Task;
+                }
+            });
+        }
+
+        private void ForceHideLoading()
+        {
+            if (LoadingGrid == null || LoadingRotate == null)
+                return;
+
+            Dispatcher.Invoke(() =>
+            {
+                // 立即停止所有动画
+                LoadingGrid.BeginAnimation(UIElement.OpacityProperty, null);
+                LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, null);
+
+                // 直接隐藏
+                LoadingGrid.Visibility = Visibility.Collapsed;
+                LoadingGrid.Opacity = 0;
+                LoadingRotate.Angle = 0;
+
+                // 重新启用控件
+                EnableAllControls();
+            });
+        }
+
+        private void DisableAllControls()
+        {
+            // 禁用所有交互控件
+            if (ServerIpInput != null) ServerIpInput.IsEnabled = false;
+            if (PortInput != null) PortInput.IsEnabled = false;
+            if (NoAuthRadio != null) NoAuthRadio.IsEnabled = false;
+            if (PasswordRadio != null) PasswordRadio.IsEnabled = false;
+            if (KeyRadio != null) KeyRadio.IsEnabled = false;
+            if (PasswordInput != null) PasswordInput.IsEnabled = false;
+            if (KeySelectButton != null) KeySelectButton.IsEnabled = false;
+            if (ConnectButton != null) ConnectButton.IsEnabled = false;
+
+            if (FolderPanel != null && FolderPanel.Visibility == Visibility.Visible)
+            {
+                if (LinuxRadio != null) LinuxRadio.IsEnabled = false;
+                if (WindowsRadio != null) WindowsRadio.IsEnabled = false;
+                if (MacRadio != null) MacRadio.IsEnabled = false;
+                if (ManualInputRadio != null) ManualInputRadio.IsEnabled = false;
+                if (BrowseServerRadio != null) BrowseServerRadio.IsEnabled = false;
+                if (SuggestedPathRadio != null) SuggestedPathRadio.IsEnabled = false;
+                if (ManualPathInput != null) ManualPathInput.IsEnabled = false;
+                if (BrowseButton != null) BrowseButton.IsEnabled = false;
+                if (ValidatePathButton != null) ValidatePathButton.IsEnabled = false;
+                if (CreateFolderButton != null) CreateFolderButton.IsEnabled = false;
+                if (ContinueButton != null) ContinueButton.IsEnabled = false;
+            }
+        }
+
+        private void EnableAllControls()
+        {
+            if (ServerIpInput != null) ServerIpInput.IsEnabled = true;
+            if (PortInput != null) PortInput.IsEnabled = true;
+            if (NoAuthRadio != null) NoAuthRadio.IsEnabled = true;
+            if (PasswordRadio != null) PasswordRadio.IsEnabled = true;
+            if (KeyRadio != null) KeyRadio.IsEnabled = true;
+            if (PasswordInput != null) PasswordInput.IsEnabled = PasswordRadio.IsChecked == true;
+            if (KeySelectButton != null) KeySelectButton.IsEnabled = KeyRadio.IsChecked == true;
+            if (ConnectButton != null) ConnectButton.IsEnabled = true;
+
+            if (FolderPanel != null && FolderPanel.Visibility == Visibility.Visible)
+            {
+                if (LinuxRadio != null) LinuxRadio.IsEnabled = true;
+                if (WindowsRadio != null) WindowsRadio.IsEnabled = true;
+                if (MacRadio != null) MacRadio.IsEnabled = true;
+                if (ManualInputRadio != null) ManualInputRadio.IsEnabled = true;
+                if (BrowseServerRadio != null) BrowseServerRadio.IsEnabled = true;
+                if (SuggestedPathRadio != null) SuggestedPathRadio.IsEnabled = true;
+                if (ManualPathInput != null) ManualPathInput.IsEnabled = ManualInputRadio.IsChecked == true;
+                if (BrowseButton != null) BrowseButton.IsEnabled = BrowseServerRadio.IsChecked == true;
+                if (ValidatePathButton != null) ValidatePathButton.IsEnabled = true;
+                if (CreateFolderButton != null) CreateFolderButton.IsEnabled = true;
+                if (ContinueButton != null) ContinueButton.IsEnabled = ContinueButton.IsEnabled; // 保持原状态
+            }
+        }
+
+        private void ShowError(string message)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                MessageBox.Show(message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            });
+        }
+
+        private bool IsWindowsRootPath(string path)
+        {
+            if (currentOsType != "windows") return false;
+
+            // 检查是否是驱动器根目录，如：C:\、D:\、C:/
+            if (string.IsNullOrEmpty(path)) return false;
+            path = path.Replace('/', '\\').TrimEnd('\\');
+            return path.Length == 2 && path[1] == ':' && char.IsLetter(path[0]);
+        }
+
+        private string NormalizePath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return rootPath;
+
+            if (currentOsType == "windows")
+            {
+                if (path == "/")
+                    return "C:\\\\";
+
+                // /cygdrive/c/Users -> C:\Users
+                if (path.StartsWith("/cygdrive/"))
+                {
+                    var p = path.Substring("/cygdrive/".Length);
+                    if (p.Length >= 1)
+                    {
+                        var driveLetter = p[0].ToString().ToUpper();
+                        var rest = p.Length > 1 ? p.Substring(1).Replace('/', '\\') : string.Empty;
+                        return driveLetter + ":\\" + rest.TrimStart('\\');
+                    }
+                }
+
+                if (path.StartsWith("/") && !path.StartsWith("/cygdrive/"))
+                {
+                    return "C:" + path.Replace('/', '\\');
+                }
+
+                return path.Replace('/', '\\');
+            }
+
+            // Unix-like
+            return path.Replace('\\', '/');
+        }
+    }
+}
