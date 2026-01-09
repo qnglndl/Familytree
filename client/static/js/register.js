@@ -41,47 +41,35 @@
  *                不见满街漂亮妹，哪个归得程序员？
  */
 
-(async () => {
-    // 先拉取服务器地址
-    let serverIp = 'localhost:5001';          // 兜底
-    try {
-        const r = await fetch('/api/server_ip');
-        const j = await r.json();
-        if (j.ip) serverIp = j.ip;
-    } catch (e) {
-        console.warn('无法读取 server_ip.txt，使用默认值', e);
+document.getElementById('regBtn').addEventListener('click', async () => {
+    const name     = document.getElementById('name').value.trim();
+    const phone    = document.getElementById('phone').value.trim();
+    const account  = document.getElementById('account').value.trim();
+    const password = document.getElementById('password').value;
+    const errMsg   = document.getElementById('errMsg');
+
+    if (!name || !phone || !account || !password) {
+        errMsg.textContent = '所有字段均不能为空';
+        return;
     }
 
-    const regBtn = document.getElementById('regBtn');
-    regBtn.addEventListener('click', async () => {
-        const name     = document.getElementById('name').value.trim();
-        const phone    = document.getElementById('phone').value.trim();
-        const account  = document.getElementById('account').value.trim();
-        const password = document.getElementById('password').value;
-        const errMsg   = document.getElementById('errMsg');
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, phone, account, password })
+        });
+        const data = await res.json();
 
-        if (!name || !phone || !account || !password) {
-            errMsg.textContent = '所有字段均不能为空';
-            return;
-        }
-
-        try {
-            const res = await fetch(`http://${serverIp}/api/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, phone, account, password })
-            });
-            const data = await res.json();
-
-            if (data.success && data.data && data.data.token) {
-                localStorage.setItem('jwt', data.data.token);
-                window.location.href = '/home';
-            } else {
-                errMsg.textContent = data.message || '注册失败';
-            }
-        } catch (e) {
-            errMsg.textContent = '网络或服务器错误';
-            console.error(e);
-        }
-    });
-})();
+    if (res.ok && data.code === 200 && data.data?.token) {
+        localStorage.setItem('jwt', data.data.token);
+        localStorage.setItem('uid', String(data.data.userInfo.id));
+        location.href = '/home';
+    } else {
+        errMsg.textContent = data.message || '注册失败';
+    }
+    } catch (e) {
+        errMsg.textContent = '网络或服务器错误';
+        console.error(e);
+    }
+});

@@ -13,6 +13,8 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
+
+
 # 导入Flask核心模块，用于创建应用和处理HTTP请求
 from flask import Flask, request, jsonify
 # 导入CORS扩展，用于处理跨域资源共享
@@ -28,11 +30,15 @@ import os
 # 导入dotenv模块，用于加载.env文件中的环境变量
 from dotenv import load_dotenv
 
+
 # 加载.env文件中的环境变量到系统环境变量中
 load_dotenv()
 
 # 创建Flask应用实例，__name__表示当前模块名，用于确定应用根目录
 app = Flask(__name__)
+
+from flask_cors import CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # 配置跨域资源共享
 # resources参数指定只有/api/*路径下的接口允许跨域请求
@@ -144,7 +150,7 @@ if __name__ == "__main__":
     # host="0.0.0.0"表示监听所有网络接口（允许外部访问）
     # port=port指定服务器端口
     # debug=True开启调试模式（开发环境使用）
-    app.run(host="::", port=port, debug=True)
+    app.run(host="127.0.0.1", port=port, debug=True)
     print("=== Registered routes ===")
     for rule in app.url_map.iter_rules():
         print(f"{rule.methods} {rule}")

@@ -79,23 +79,25 @@ class Database:
     def execute_query(self, query, params=None):
         """执行查询"""
         try:
-            # 检查连接是否有效，如有必要则重新连接
             if not self._check_connection():
                 self.disconnect()
                 self.connect()
             self.cursor.execute(query, params)
             self.conn.commit()
+            # 关键：主分支也保存 lastrowid
+            self.lastrowid = self.cursor.lastrowid
             return True
         except Exception as e:
             print(f"查询执行错误: {e}")
             if self.conn:
                 self.conn.rollback()
-            # 如果出现连接错误，尝试重新连接并重试执行
+            # 重试分支已经加了 lastrowid，这里保持不变
             try:
                 self.disconnect()
                 self.connect()
                 self.cursor.execute(query, params)
                 self.conn.commit()
+                self.lastrowid = self.cursor.lastrowid
                 return True
             except Exception as retry_error:
                 print(f"重试查询执行错误: {retry_error}")

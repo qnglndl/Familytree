@@ -19,14 +19,7 @@ import re
 
 app = Flask(__name__)
 
-# 假设远端 API 的基地址，实际部署时改为你自己的域名
-with open("server_ip.txt", "r", encoding="utf-8") as f:
-    server_ip = f.readline().strip()
-    REMOTE_API_BASE = server_ip # 仅示例，真实地址请替换
 
-# 提取主机名用于后续检查
-match = re.search(r'(?<=://)([^:/\[\]]+|\[[^\]]+\])', REMOTE_API_BASE)
-host = match.group(1).strip('[]') if match else None
 
 @app.route("/")
 def index():
@@ -41,34 +34,14 @@ def login_page():
 
 @app.route("/home")
 def home():
-    """登录成功后的跳转页，目前仅占位"""
-    return "这是族谱首页，后续再开发。"
-
-# 可选：代理接口，用于解决 CORS 或调试
-# 如果你的前端直接访问远端 /api/auth/login，可删除此段
-@app.route("/api/auth/login", methods=["POST"])
-def proxy_login():
-    """把本地 /api/auth/login 转发到远端"""
-    import requests
-    resp = requests.post(
-        f"{REMOTE_API_BASE}/api/auth/login",
-        json=request.get_json(),
-        headers={"Content-Type": "application/json"}
-    )
-    return jsonify(resp.json()), resp.status_code
+    """登录成功后的跳转页"""
+    return render_template("lhome.html")
 
 @app.route("/register")
 def register_page():
     return render_template("register.html")
 
-@app.route("/api/server_ip")
-def server_ip():
-    try:
-        with open("server_ip.txt", "r", encoding="utf-8") as f:
-            ip = f.readline().strip()
-        return jsonify({"ip": ip})
-    except Exception:
-        return jsonify({"ip": "localhost"}), 500
+
     
 @app.route("/api/tree")
 def tree_data():
@@ -93,13 +66,6 @@ def tree_data():
     })
 
 if __name__ == "__main__":
-    if os.name == "nt":  # Windows
-        ret = os.system(f'ping -n 1 {host} >nul')
-    else:                # Unix/Linux/macOS
-        ret = os.system(f'ping -c 1 {host} > /dev/null')
-    if ret != 0:
-        print(f"远端服务器({host})无法访问，请检查网络连接或远端服务器状态。")
-        exit(1)
     print(r"""
                         _oo0oo_
                        o8888888o
@@ -135,4 +101,4 @@ if __name__ == "__main__":
                 别人笑我忒疯癫，我笑自己命太贱；  
                 不见满街漂亮妹，哪个归得程序员？
  """)
-    app.run(debug=True,host="::", port=5000)
+    app.run(debug=True, host="::", port=5000)

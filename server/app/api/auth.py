@@ -57,12 +57,14 @@ from app.utils.password import password_manager
 from app.utils.jwt import jwt_manager
 import uuid
 from datetime import datetime
+import traceback
 
 # 创建Flask蓝图，定义认证相关的API路由
 bp = Blueprint('auth', __name__)
 
 @bp.route('/register', methods=['POST'])
 def register():
+    user_id = None
     """
     用户注册接口
     
@@ -94,62 +96,66 @@ def register():
         - 1001: 账号已存在
         - 1002: 手机号码已存在
     """
-    data = request.get_json()
-    if not data:
-        return Response.error(400, "请求参数不能为空")
-    
-    required_fields = ['name', 'phone', 'account', 'password']
-    for field in required_fields:
-        if not data.get(field):
-            return Response.error(400, f"{field}不能为空")
-    
-    # 检查账号是否已存在
-    existing_account = db.fetch_one(
-        "SELECT id FROM user_tab WHERE account = %s",
-        (data['account'],)
-    )
-    if existing_account:
-        return Response.error(1001, "账号已存在")
-    
-    # 检查手机号码是否已存在
-    existing_phone = db.fetch_one(
-        "SELECT id FROM user_tab WHERE phone = %s",
-        (data['phone'],)
-    )
-    if existing_phone:
-        return Response.error(1002, "手机号码已存在")
-    
-    # 生成用户ID
-    user_id = str(uuid.uuid4())[:16]
-    
-    # 对密码进行哈希处理
-    hashed_password = password_manager.hash_password(data['password'])
-    
-    # 将用户插入数据库
-    query = """
-    INSERT INTO user_tab (id, name, phone, account, password)
-    VALUES (%s, %s, %s, %s, %s)
-    """
-    params = (user_id, data['name'], data['phone'], data['account'], hashed_password)
-    
-    if not db.execute_query(query, params):
-        return Response.error(500, "注册失败")
-    
-    # 生成令牌
-    token = jwt_manager.generate_token(user_id)
-    
-    return Response.success(
-        {
-            "token": token,
-            "userInfo": {
-                "id": user_id,
-                "name": data['name'],
-                "phone": data['phone'],
-                "account": data['account']
-            }
-        },
-        "注册成功"
-    )
+    try:
+        data = request.get_json()
+        if not data:
+            return Response.error(400, "请求参数不能为空")
+        
+        required_fields = ['name', 'phone', 'account', 'password']
+        for field in required_fields:
+            if not data.get(field):
+                return Response.error(400, f"{field}不能为空")
+        
+        # 检查账号是否已存在
+        existing_account = db.fetch_one(
+            "SELECT id FROM user_tab WHERE account = %s",
+            (data['account'],)
+        )
+        if existing_account:
+            return Response.error(1001, "账号已存在")
+        
+        # 检查手机号码是否已存在
+        existing_phone = db.fetch_one(
+            "SELECT id FROM user_tab WHERE phone = %s",
+            (data['phone'],)
+        )
+        if existing_phone:
+            return Response.error(1002, "手机号码已存在")
+        
+        # 生成用户ID
+        #user_id = str(uuid.uuid4())[:16]
+        
+        # 对密码进行哈希处理
+        hashed_password = password_manager.hash_password(data['password'])
+        
+        # 将用户插入数据库
+        query = """
+        INSERT INTO user_tab (name, phone, account, password)
+        VALUES (%s, %s, %s, %s)
+        """
+        params = (data['name'], data['phone'], data['account'], hashed_password)
+        
+        if not db.execute_query(query, params):
+            return Response.error(500, "注册失败")
+        user_id = db.lastrowid
+        # 生成令牌
+        token = jwt_manager.generate_token(user_id)
+        
+        return Response.success(
+            {
+                "token": token,
+                "userInfo": {
+                    "id": user_id,
+                    "name": data['name'],
+                    "phone": data['phone'],
+                    "account": data['account']
+                }
+            },
+            "注册成功"
+        )
+    except Exception as e:
+        # 把完整栈返给前端，一眼定位
+        return Response.error(500, traceback.format_exc())
 
 @bp.route('/login', methods=['POST'])
 def login():
