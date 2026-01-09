@@ -1,476 +1,676 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Threading.Tasks;
-using Microsoft.Win32;
-
-// SSH.NET 引用
 using Renci.SshNet;
-using Renci.SshNet.Common;
+using Microsoft.Win32;
 
 namespace Connect_to_server_gui
 {
     public partial class MainWindow : Window
     {
-        private bool isConnecting = false;
-        private string selectedKeyFilePath = "";
+        private SshClient _sshClient;
+        private bool _isConnected = false;
+        private string _selectedFolderPath = string.Empty;
+        private string _currentServerPath = "/";
+
+        private readonly Dictionary<string, List<string>> _suggestedPaths =
+            new Dictionary<string, List<string>>
+            {
+                ["Linux"] = new List<string> { "/home/user/Familytree", "/root/Familytree", "/opt/Familytree" },
+                ["Windows"] = new List<string> { @"C:\Familytree", @"D:\Familytree", @"C:\Program Files\Familytree" },
+                ["macOS"] = new List<string> { "/Users/user/Familytree", "/Library/Familytree", "/Applications/Familytree" }
+            };
 
         public MainWindow()
         {
             InitializeComponent();
-
-            // 设置初始状态
-            NoAuthRadio.IsChecked = true;
-            PasswordInput.IsEnabled = false;
-            KeySelectButton.IsEnabled = false;
-            ServerIpInput.Foreground = Brushes.Gray;
-
-            // 绑定事件
-            AttachEvents();
-
-            // 立即开始启动动画
-            StartWelcomeAnimation();
+            InitUI();
+            BindEvents();
+            AnimateStartup();
         }
 
-        private void AttachEvents()
+        #region 初始化
+        private void InitUI()
         {
-            ServerIpInput.GotFocus += ServerIpInput_GotFocus;
-            ServerIpInput.LostFocus += ServerIpInput_LostFocus;
-            NoAuthRadio.Checked += AuthenticationMethod_Changed;
-            PasswordRadio.Checked += AuthenticationMethod_Changed;
-            KeyRadio.Checked += AuthenticationMethod_Changed;
-            KeySelectButton.Click += KeySelectButton_Click;
+            Dispatcher.Invoke(() =>
+            {
+                NoAuthRadio.IsChecked = true;
+                LinuxRadio.IsChecked = true;
+                ManualInputRadio.IsChecked = true;
+                UpdateSuggestedPaths("Linux");
+                SetWatermark(ServerIpInput, "用户名@服务器IP");
+                PasswordInput.IsEnabled = false;
+                KeySelectButton.IsEnabled = false;
+                BrowseButton.IsEnabled = false;
+                ContinueButton.IsEnabled = false;
+                if (KeyFilePathText != null && string.IsNullOrEmpty(KeyFilePathText.Text))
+                    KeyFilePathText.Text = "未选择文件";
+            });
+        }
+
+        private void SetWatermark(TextBox tb, string watermark)
+        {
+            if (string.IsNullOrEmpty(tb.Text))
+            {
+                tb.Text = watermark;
+                tb.Foreground = Brushes.Gray;
+            }
+            tb.GotFocus += (s, e) =>
+            {
+                if (tb.Text == watermark)
+                {
+                    tb.Text = "";
+                    tb.Foreground = Brushes.Black;
+                }
+            };
+            tb.LostFocus += (s, e) =>
+            {
+                if (string.IsNullOrEmpty(tb.Text))
+                {
+                    tb.Text = watermark;
+                    tb.Foreground = Brushes.Gray;
+                }
+            };
+        }
+
+        private void BindEvents()
+        {
+            NoAuthRadio.Checked += AuthType_Checked;
+            PasswordRadio.Checked += AuthType_Checked;
+            KeyRadio.Checked += AuthType_Checked;
+
+            LinuxRadio.Checked += OsRadio_Checked;
+            WindowsRadio.Checked += OsRadio_Checked;
+            MacRadio.Checked += OsRadio_Checked;
+
+            ManualInputRadio.Checked += SelectMethod_Checked;
+            BrowseServerRadio.Checked += SelectMethod_Checked;
+            SuggestedPathRadio.Checked += SelectMethod_Checked;
+
             ConnectButton.Click += ConnectButton_Click;
-            CloseResultButton.Click += CloseResultButton_Click;
+            KeySelectButton.Click += KeySelectButton_Click;
+            ValidatePathButton.Click += ValidatePathButton_Click;
+            CreateFolderButton.Click += CreateFolderButton_Click;
+            ContinueButton.Click += ContinueButton_Click;
+            BrowseButton.Click += BrowseButton_Click;
+            SelectFolderButton.Click += SelectFolderButton_Click;
+            CancelBrowseButton.Click += CancelBrowseButton_Click;
+            GoUpButton.Click += GoUpButton_Click;
+        }
+        #endregion
+
+        #region 认证 & OS & 选择方式
+        private void AuthType_Checked(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                PasswordInput.IsEnabled = PasswordRadio.IsChecked == true;
+                KeySelectButton.IsEnabled = KeyRadio.IsChecked == true;
+            });
         }
 
-        private async void StartWelcomeAnimation()
+        private void OsRadio_Checked(object sender, RoutedEventArgs e)
         {
-            // 欢迎文字淡入
-            var welcomeFadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(1)
-            };
-            WelcomeText.BeginAnimation(UIElement.OpacityProperty, welcomeFadeIn);
-
-            await Task.Delay(2000);
-
-            // 欢迎文字淡出
-            var welcomeFadeOut = new DoubleAnimation
-            {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromSeconds(0.5)
-            };
-            WelcomeText.BeginAnimation(UIElement.OpacityProperty, welcomeFadeOut);
-
-            await Task.Delay(500);
-
-            // 显示连接面板
-            var panelFadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(0.5)
-            };
-            ConnectionPanel.BeginAnimation(UIElement.OpacityProperty, panelFadeIn);
+            if (LinuxRadio.IsChecked == true)
+                UpdateSuggestedPaths("Linux");
+            else if (WindowsRadio.IsChecked == true)
+                UpdateSuggestedPaths("Windows");
+            else if (MacRadio.IsChecked == true)
+                UpdateSuggestedPaths("macOS");
         }
 
-        private void ServerIpInput_GotFocus(object sender, RoutedEventArgs e)
+        private void SelectMethod_Checked(object sender, RoutedEventArgs e)
         {
-            if (ServerIpInput.Text == "用户名@服务器IP")
+            Dispatcher.Invoke(() =>
             {
-                ServerIpInput.Text = "";
-                ServerIpInput.Foreground = Brushes.Black;
+                ManualPathInput.IsEnabled = ManualInputRadio.IsChecked == true;
+                BrowseButton.IsEnabled = BrowseServerRadio.IsChecked == true && _isConnected;
+                CurrentPathInput.IsEnabled = BrowseServerRadio.IsChecked == true;
+            });
+        }
+
+        private void UpdateSuggestedPaths(string os)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (SuggestedPathsPanel == null) return;
+                SuggestedPathsPanel.Children.Clear();
+                if (!_suggestedPaths.TryGetValue(os, out var list)) return;
+                foreach (var p in list)
+                {
+                    var btn = new Button
+                    {
+                        Content = p,
+                        Width = 400,
+                        Height = 35,
+                        Margin = new Thickness(0, 5, 0, 5),
+                        HorizontalContentAlignment = HorizontalAlignment.Left,
+                        Padding = new Thickness(10, 0, 0, 0),
+                        Background = Brushes.White,
+                        BorderBrush = Brushes.LightGray,
+                        BorderThickness = new Thickness(1)
+                    };
+                    btn.Click += (s, e) =>
+                    {
+                        Dispatcher.Invoke(() =>
+                        {
+                            ManualPathInput.Text = p;
+                            _selectedFolderPath = p;
+                        });
+                    };
+                    SuggestedPathsPanel.Children.Add(btn);
+                }
+            });
+        }
+        #endregion
+
+        #region SSH 连接
+        private async void ConnectButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Dispatcher.Invoke(() => ServerIpInput.Text == "用户名@服务器IP") ||
+                Dispatcher.Invoke(() => !ServerIpInput.Text.Contains('@')))
+            {
+                MessageBox.Show("请输入正确格式：用户名@IP", "错误");
+                return;
             }
-        }
 
-        private void ServerIpInput_LostFocus(object sender, RoutedEventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(ServerIpInput.Text))
+            if (!int.TryParse(Dispatcher.Invoke(() => PortInput.Text), out int port) || port <= 0 || port > 65535)
             {
-                ServerIpInput.Text = "用户名@服务器IP";
-                ServerIpInput.Foreground = Brushes.Gray;
+                MessageBox.Show("端口无效（1-65535）", "错误");
+                return;
             }
-        }
 
-        private void AuthenticationMethod_Changed(object sender, RoutedEventArgs e)
-        {
-            PasswordInput.IsEnabled = PasswordRadio.IsChecked == true;
-            KeySelectButton.IsEnabled = KeyRadio.IsChecked == true;
+            var serverText = Dispatcher.Invoke(() => ServerIpInput.Text);
+            var ss = serverText.Split('@');
+            string user = ss[0], host = ss[1];
+
+            ShowLoading("正在连接...");
+            try
+            {
+                await Task.Run(() =>
+                {
+                    bool isNoAuth = Dispatcher.Invoke(() => NoAuthRadio.IsChecked == true);
+                    bool isPassword = Dispatcher.Invoke(() => PasswordRadio.IsChecked == true);
+                    bool isKey = Dispatcher.Invoke(() => KeyRadio.IsChecked == true);
+
+                    if (isNoAuth)
+                        _sshClient = new SshClient(host, port, user);
+                    else if (isPassword)
+                    {
+                        var password = Dispatcher.Invoke(() => PasswordInput.Password);
+                        _sshClient = new SshClient(host, port, user, password);
+                    }
+                    else if (isKey)
+                    {
+                        var keyPath = Dispatcher.Invoke(() => KeyFilePathText.Text);
+                        if (keyPath == "未选择文件")
+                            throw new Exception("请选择私钥文件");
+                        var pk = new PrivateKeyFile(keyPath);
+                        _sshClient = new SshClient(host, port, user, new[] { pk });
+                    }
+                    _sshClient.Connect();
+                });
+
+                _isConnected = true;
+                HideLoading();
+
+                Dispatcher.Invoke(() =>
+                {
+                    ServerInfoText.Text = $"已连接到：{host}:{port}\n用户名：{user}\nSSH版本：SSH-2.0";
+                    AnimatePanelSwitch(ConnectionPanel, FolderPanel);
+                });
+            }
+            catch (Exception ex)
+            {
+                HideLoading();
+                MessageBox.Show(ex.Message, "连接失败");
+            }
         }
 
         private void KeySelectButton_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog
+            var dlg = new OpenFileDialog
             {
-                Filter = "密钥文件 (*.pem;*.ppk)|*.pem;*.ppk|所有文件 (*.*)|*.*",
-                Title = "选择SSH密钥文件",
-                Multiselect = false
+                Filter = "私钥文件 (*.pem;*.ppk)|*.pem;*.ppk|所有文件 (*.*)|*.*",
+                Title = "选择SSH私钥文件"
             };
+            if (dlg.ShowDialog() == true)
+                Dispatcher.Invoke(() => KeyFilePathText.Text = dlg.FileName);
+        }
+        #endregion
 
-            if (openFileDialog.ShowDialog() == true)
+        #region 目录浏览
+        private async void BrowseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isConnected)
             {
-                selectedKeyFilePath = openFileDialog.FileName;
-                KeyFilePathText.Text = Path.GetFileName(selectedKeyFilePath);
-                KeyFilePathText.ToolTip = selectedKeyFilePath;
+                MessageBox.Show("请先连接服务器", "错误");
+                return;
             }
+
+            await Dispatcher.InvokeAsync(async () =>
+            {
+                DirectoryBrowserGrid.Visibility = Visibility.Visible;
+                var fade = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.3));
+                DirectoryBrowserGrid.BeginAnimation(OpacityProperty, fade);
+                await LoadDirectoryContents(_currentServerPath);
+            });
         }
 
-        private async void ConnectButton_Click(object sender, RoutedEventArgs e)
+        private async Task LoadDirectoryContents(string path)
         {
-            if (isConnecting) return;
-
-            // 验证输入
-            var serverInput = ServerIpInput.Text.Trim();
-            if (serverInput == "用户名@服务器IP" || string.IsNullOrWhiteSpace(serverInput))
+            // 在 UI 线程初始化
+            await Dispatcher.InvokeAsync(async () =>
             {
-                ShowMessage("错误", "请输入服务器地址！", false);
-                ServerIpInput.Focus();
-                return;
-            }
+                ShowLoading("正在加载目录...");
+                BrowserDirectoryListPanel?.Children.Clear();
+                if (BrowserPathInput != null) BrowserPathInput.Text = path;
 
-            if (!serverInput.Contains('@'))
-            {
-                ShowMessage("错误", "请输入正确的格式：用户名@服务器IP", false);
-                ServerIpInput.Focus();
-                return;
-            }
+                try
+                {
+                    // 在后台线程执行 SSH 命令
+                    var (result, error) = await Task.Run(() =>
+                    {
+                        try
+                        {
+                            if (_sshClient == null || !_sshClient.IsConnected)
+                                throw new Exception("SSH连接已断开");
 
-            // 解析用户名和主机名
-            var parts = serverInput.Split('@');
-            var username = parts[0];
-            var hostname = parts[1];
+                            // 使用更简单的命令来避免编码问题
+                            var cmd = _sshClient.CreateCommand($"ls -la \"{EscapePath(path)}\" 2>&1");
+                            var res = cmd.Execute();
+                            return (res, cmd.Error);
+                        }
+                        catch (Exception ex)
+                        {
+                            return (string.Empty, ex.Message);
+                        }
+                    });
 
-            // 解析端口
-            if (!int.TryParse(PortInput.Text.Trim(), out int port))
-            {
-                port = 22;
-            }
+                    if (!string.IsNullOrEmpty(error) && error.Contains("No such file"))
+                    {
+                        // 目录不存在，创建它
+                        await TryCreateDirectory(path);
+                        return;
+                    }
 
-            if (port <= 0 || port > 65535)
-            {
-                ShowMessage("错误", "请输入有效的端口号（1-65535）！", false);
-                PortInput.Focus();
-                return;
-            }
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        throw new Exception($"无法访问目录: {error}");
+                    }
 
-            // 验证认证方式
-            if (PasswordRadio.IsChecked == true && string.IsNullOrEmpty(PasswordInput.Password))
-            {
-                ShowMessage("错误", "请输入密码！", false);
-                PasswordInput.Focus();
-                return;
-            }
+                    // 解析结果并在 UI 线程更新
+                    ProcessDirectoryResult(result, path);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"加载目录失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    HideLoading();
+                }
+            });
+        }
 
-            if (KeyRadio.IsChecked == true && (string.IsNullOrEmpty(selectedKeyFilePath) || !File.Exists(selectedKeyFilePath)))
-            {
-                ShowMessage("错误", "请选择有效的密钥文件！", false);
-                return;
-            }
+        private async Task TryCreateDirectory(string path)
+        {
+            // 移除 await，MessageBox.Show 是同步方法
+            var result = MessageBox.Show($"目录 '{path}' 不存在，是否创建？", "确认",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
 
-            // 开始连接
-            isConnecting = true;
-            await ShowLoading(true);
+            if (result != MessageBoxResult.Yes) return;
 
+            ShowLoading("正在创建目录...");
             try
             {
-                bool success = false;
-                string message = "";
-
-                if (NoAuthRadio.IsChecked == true)
+                var success = await Task.Run(() =>
                 {
-                    (success, message) = await ConnectWithNoAuth(hostname, port, username);
-                }
-                else if (PasswordRadio.IsChecked == true)
-                {
-                    (success, message) = await ConnectWithPassword(hostname, port, username, PasswordInput.Password);
-                }
-                else if (KeyRadio.IsChecked == true)
-                {
-                    (success, message) = await ConnectWithKey(hostname, port, username, selectedKeyFilePath);
-                }
+                    var cmd = _sshClient.CreateCommand($"mkdir -p \"{EscapePath(path)}\"");
+                    cmd.Execute();
+                    return cmd.ExitStatus == 0;
+                });
 
-                await ShowLoading(false);
-
-                ShowMessage(success ? "成功" : "失败", message, success);
+                if (success)
+                {
+                    // 重新加载目录
+                    await LoadDirectoryContents(path);
+                }
+                else
+                {
+                    MessageBox.Show("创建目录失败", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
             catch (Exception ex)
             {
-                await ShowLoading(false);
-                ShowMessage("异常", $"连接异常：{ex.Message}", false);
+                MessageBox.Show($"创建目录失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
-                isConnecting = false;
+                HideLoading();
             }
         }
 
-        private async Task<(bool success, string message)> ConnectWithNoAuth(string hostname, int port, string username)
+        private string EscapePath(string path)
         {
-            return await Task.Run(() =>
-            {
-                try
-                {
-                    // 测试端口连接性
-                    using (var client = new System.Net.Sockets.TcpClient())
-                    {
-                        var result = client.BeginConnect(hostname, port, null, null);
-                        var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5));
+            // 转义路径中的特殊字符
+            return path.Replace("\"", "\\\"");
+        }
 
-                        if (success)
-                        {
-                            client.EndConnect(result);
-                            client.Close();
-                            return (true,
-                                $"✅ 端口连接成功\n\n" +
-                                $"🔗 服务器: {hostname}:{port}\n" +
-                                $"👤 用户: {username}\n" +
-                                $"🔐 认证方式: 无密码\n" +
-                                $"📊 状态: SSH端口可访问\n\n" +
-                                $"💡 提示: 服务器需要配置免密码SSH登录");
-                        }
-                        else
-                        {
-                            return (false, "❌ 连接超时：5秒内无响应");
-                        }
-                    }
-                }
-                catch (Exception ex)
+        private void ProcessDirectoryResult(string result, string path)
+        {
+            if (BrowserDirectoryListPanel == null) return;
+
+            var lines = result.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // 如果没有内容（空目录）
+            if (lines.Length == 0)
+            {
+                var emptyText = new TextBlock
                 {
-                    return (false, $"❌ 连接失败：{ex.Message}");
+                    Text = "（空目录）",
+                    FontSize = 14,
+                    Foreground = Brushes.Gray,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(10)
+                };
+                BrowserDirectoryListPanel.Children.Add(emptyText);
+                return;
+            }
+
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("total")) continue;
+
+                var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 9) continue;
+
+                bool isDir = parts[0].StartsWith("d");
+                string name = parts[8];
+
+                // 跳过 . 和 ..
+                if (name == "." || name == "..") continue;
+
+                // 处理长文件名（可能包含空格）
+                if (parts.Length > 9)
+                {
+                    name = string.Join(" ", parts, 8, parts.Length - 8);
                 }
+
+                string full = path == "/" ? $"/{name}" : $"{path}/{name}";
+
+                var sp = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(5),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = $"类型: {(isDir ? "文件夹" : "文件")}\n路径: {full}"
+                };
+
+                var icon = new TextBlock
+                {
+                    Text = isDir ? "📁" : "📄",
+                    FontSize = 16,
+                    Margin = new Thickness(0, 0, 10, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                var txt = new TextBlock
+                {
+                    Text = name,
+                    FontSize = 14,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = isDir ? Brushes.DarkBlue : Brushes.Black,
+                    TextWrapping = TextWrapping.Wrap
+                };
+
+                sp.Children.Add(icon);
+                sp.Children.Add(txt);
+
+                sp.MouseLeftButtonUp += async (s, e) =>
+                {
+                    if (isDir)
+                    {
+                        _currentServerPath = full;
+                        await LoadDirectoryContents(full);
+                    }
+                };
+
+                BrowserDirectoryListPanel.Children.Add(sp);
+            }
+        }
+
+        private async void GoUpButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentServerPath == "/") return;
+            var parent = Path.GetDirectoryName(_currentServerPath)?.Replace('\\', '/') ?? "/";
+            _currentServerPath = parent;
+            await LoadDirectoryContents(_currentServerPath);
+        }
+
+        private void SelectFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _selectedFolderPath = _currentServerPath;
+                ManualPathInput.Text = _currentServerPath;
+                CurrentPathInput.Text = _currentServerPath;
+                var fade = new DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.3));
+                fade.Completed += (s, _) => DirectoryBrowserGrid.Visibility = Visibility.Collapsed;
+                DirectoryBrowserGrid.BeginAnimation(OpacityProperty, fade);
             });
         }
 
-        private async Task<(bool success, string message)> ConnectWithPassword(string hostname, int port, string username, string password)
+        private void CancelBrowseButton_Click(object sender, RoutedEventArgs e)
         {
-            return await Task.Run(() =>
+            Dispatcher.Invoke(() =>
             {
-                try
+                var fade = new DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.3));
+                fade.Completed += (s, _) => DirectoryBrowserGrid.Visibility = Visibility.Collapsed;
+                DirectoryBrowserGrid.BeginAnimation(OpacityProperty, fade);
+            });
+        }
+        #endregion
+
+        #region 路径验证/创建/进入
+        private async void ValidatePathButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isConnected)
+            {
+                MessageBox.Show("请先连接服务器");
+                return;
+            }
+
+            string path = await Dispatcher.InvokeAsync(GetSelectedPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                MessageBox.Show("请输入或选择路径");
+                return;
+            }
+
+            ShowLoading("正在验证...");
+            try
+            {
+                bool ok = await Task.Run(() =>
                 {
-                    using (var client = new SshClient(hostname, port, username, password))
+                    // 使用更简单的命令来验证目录是否存在
+                    var cmd = _sshClient.CreateCommand($"[ -d \"{EscapePath(path)}\" ] && echo 'exists'");
+                    var result = cmd.Execute().Trim().ToLower();
+                    return result == "exists";
+                });
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    HideLoading();
+                    ValidationResultBorder.Visibility = Visibility.Visible;
+                    if (ok)
                     {
-                        client.Connect();
-
-                        if (client.IsConnected)
-                        {
-                            // 获取服务器信息
-                            var hostnameCmd = client.RunCommand("hostname");
-                            var whoamiCmd = client.RunCommand("whoami");
-                            var osCmd = client.RunCommand("uname -a");
-                            var diskCmd = client.RunCommand("df -h / | tail -1");
-
-                            client.Disconnect();
-
-                            return (true,
-                                $"✅ SSH连接成功\n\n" +
-                                $"🔗 服务器: {hostname}:{port}\n" +
-                                $"👤 用户: {username}\n" +
-                                $"🔐 认证方式: 密码\n" +
-                                $"📊 状态: 已连接\n\n" +
-                                $"📋 服务器信息:\n" +
-                                $"   主机名: {hostnameCmd.Result.Trim()}\n" +
-                                $"   当前用户: {whoamiCmd.Result.Trim()}\n" +
-                                $"   系统信息: {osCmd.Result.Trim()}\n" +
-                                $"   磁盘使用: {diskCmd.Result.Trim()}");
-                        }
-                        else
-                        {
-                            return (false, "❌ 连接失败：无法建立SSH连接");
-                        }
+                        ValidationResultTitle.Text = "✅ 路径有效";
+                        ValidationResultTitle.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#2E7D32"));
+                        ValidationResultText.Text = $"路径 {path} 存在且可访问";
+                        ContinueButton.IsEnabled = true;
+                        _selectedFolderPath = path;
                     }
-                }
-                // 修复这里：使用 SshAuthenticationException 而不是 AuthenticationException
-                catch (SshAuthenticationException ex)
+                    else
+                    {
+                        ValidationResultTitle.Text = "❌ 路径无效";
+                        ValidationResultTitle.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#C62828"));
+                        ValidationResultText.Text = $"路径 {path} 不存在或无访问权限";
+                        ContinueButton.IsEnabled = false;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                HideLoading();
+                MessageBox.Show($"验证失败: {ex.Message}", "错误");
+            }
+        }
+
+        private async void CreateFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isConnected) return;
+
+            string path = await Dispatcher.InvokeAsync(GetSelectedPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                MessageBox.Show("请输入要创建的文件夹路径");
+                return;
+            }
+
+            // 移除 await，MessageBox.Show 是同步方法
+            if (MessageBox.Show($"确定创建文件夹：{path} 吗？", "确认", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                return;
+
+            ShowLoading("正在创建...");
+            try
+            {
+                bool ok = await Task.Run(() =>
                 {
-                    return (false, $"❌ 认证失败：用户名或密码错误\n\n{ex.Message}");
-                }
-                catch (SshConnectionException ex)
+                    var cmd = _sshClient.CreateCommand($"mkdir -p \"{EscapePath(path)}\"");
+                    cmd.Execute();
+                    return cmd.ExitStatus == 0;
+                });
+
+                HideLoading();
+                if (ok)
                 {
-                    return (false, $"❌ 连接异常：{ex.Message}");
+                    MessageBox.Show("创建成功");
+                    // 重新验证路径
+                    ValidatePathButton_Click(sender, e);
                 }
-                catch (Exception ex)
+                else
                 {
-                    return (false, $"❌ 连接失败：{ex.Message}");
+                    MessageBox.Show("创建失败");
                 }
+            }
+            catch (Exception ex)
+            {
+                HideLoading();
+                MessageBox.Show($"创建失败: {ex.Message}", "错误");
+            }
+        }
+
+        private void ContinueButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_selectedFolderPath) || !_isConnected)
+            {
+                MessageBox.Show("请先验证有效路径");
+                return;
+            }
+            MessageBox.Show($"成功进入族谱系统！\n服务器路径：{_selectedFolderPath}", "成功");
+            // TODO: 打开主窗口
+        }
+
+        private string GetSelectedPath()
+        {
+            if (ManualInputRadio.IsChecked == true)
+                return ManualPathInput.Text.Trim();
+            if (BrowseServerRadio.IsChecked == true)
+                return CurrentPathInput.Text.Trim();
+            if (SuggestedPathRadio.IsChecked == true)
+                return ManualPathInput.Text.Trim();
+            return string.Empty;
+        }
+        #endregion
+
+        #region 动画 & 加载
+        private void AnimateStartup()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (WelcomeText == null) return;
+                var wFade = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(1.5)) { EasingFunction = new QuadraticEase() };
+                WelcomeText.BeginAnimation(OpacityProperty, wFade);
+
+                Task.Delay(1000).ContinueWith(_ =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (ConnectionPanel == null) return;
+                        ConnectionPanel.Visibility = Visibility.Visible;
+                        var pFade = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(1)) { EasingFunction = new QuadraticEase() };
+                        ConnectionPanel.BeginAnimation(OpacityProperty, pFade);
+                    });
+                });
             });
         }
 
-        private async Task<(bool success, string message)> ConnectWithKey(string hostname, int port, string username, string keyFilePath)
+        private void ShowLoading(string txt = "正在加载...")
         {
-            return await Task.Run(() =>
+            Dispatcher.Invoke(() =>
             {
-                try
-                {
-                    // 读取密钥文件
-                    var keyFile = new PrivateKeyFile(keyFilePath);
-                    var keyFiles = new[] { keyFile };
-
-                    var connectionInfo = new ConnectionInfo(
-                        hostname,
-                        port,
-                        username,
-                        new PrivateKeyAuthenticationMethod(username, keyFiles)
-                    );
-
-                    using (var client = new SshClient(connectionInfo))
-                    {
-                        client.Connect();
-
-                        if (client.IsConnected)
-                        {
-                            // 获取服务器信息
-                            var hostnameCmd = client.RunCommand("hostname");
-                            var whoamiCmd = client.RunCommand("whoami");
-                            var uptimeCmd = client.RunCommand("uptime -p");
-                            var memoryCmd = client.RunCommand("free -h | grep Mem");
-
-                            client.Disconnect();
-
-                            return (true,
-                                $"✅ SSH连接成功\n\n" +
-                                $"🔗 服务器: {hostname}:{port}\n" +
-                                $"👤 用户: {username}\n" +
-                                $"🔐 认证方式: 密钥文件\n" +
-                                $"🗝️ 密钥文件: {Path.GetFileName(keyFilePath)}\n" +
-                                $"📊 状态: 已连接\n\n" +
-                                $"📋 服务器信息:\n" +
-                                $"   主机名: {hostnameCmd.Result.Trim()}\n" +
-                                $"   当前用户: {whoamiCmd.Result.Trim()}\n" +
-                                $"   运行时间: {uptimeCmd.Result.Trim()}\n" +
-                                $"   内存使用: {memoryCmd.Result.Trim()}");
-                        }
-                        else
-                        {
-                            return (false, "❌ 连接失败：无法建立SSH连接");
-                        }
-                    }
-                }
-                catch (SshAuthenticationException ex)
-                {
-                    return (false, $"❌ 认证失败：密钥文件无效或需要密码\n\n{ex.Message}");
-                }
-                catch (SshConnectionException ex)
-                {
-                    return (false, $"❌ 连接异常：{ex.Message}");
-                }
-                catch (Exception ex)
-                {
-                    return (false, $"❌ 连接失败：{ex.Message}");
-                }
-            });
-        }
-
-        private void ShowMessage(string title, string message, bool isSuccess)
-        {
-            ResultTitle.Text = title;
-            ResultText.Text = message;
-
-            // 根据成功/失败设置颜色
-            ResultTitle.Foreground = isSuccess ?
-                new SolidColorBrush(Color.FromRgb(46, 125, 50)) : // 绿色
-                new SolidColorBrush(Color.FromRgb(211, 47, 47));  // 红色
-
-            // 显示结果面板
-            ResultPanel.Visibility = Visibility.Visible;
-            var fadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromSeconds(0.5)
-            };
-            ResultPanel.BeginAnimation(UIElement.OpacityProperty, fadeIn);
-        }
-
-        private void CloseResultButton_Click(object sender, RoutedEventArgs e)
-        {
-            var fadeOut = new DoubleAnimation
-            {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromSeconds(0.3)
-            };
-
-            fadeOut.Completed += (s, args) =>
-            {
-                ResultPanel.Visibility = Visibility.Collapsed;
-            };
-
-            ResultPanel.BeginAnimation(UIElement.OpacityProperty, fadeOut);
-        }
-
-        private async Task ShowLoading(bool show)
-        {
-            if (show)
-            {
-                DisableAllControls();
+                if (LoadingGrid == null || LoadingText == null || LoadingRotate == null) return;
                 LoadingGrid.Visibility = Visibility.Visible;
-                var fadeIn = new DoubleAnimation
-                {
-                    To = 1,
-                    Duration = TimeSpan.FromSeconds(0.3)
-                };
-                LoadingGrid.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                LoadingText.Text = txt;
+                LoadingGrid.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.3)));
+                LoadingRotate.BeginAnimation(RotateTransform.AngleProperty,
+                    new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1)) { RepeatBehavior = RepeatBehavior.Forever });
+            });
+        }
 
-                var rotateAnimation = new DoubleAnimation
-                {
-                    From = 0,
-                    To = 360,
-                    Duration = TimeSpan.FromSeconds(1),
-                    RepeatBehavior = RepeatBehavior.Forever
-                };
-                LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, rotateAnimation);
-            }
-            else
+        private void HideLoading()
+        {
+            Dispatcher.Invoke(() =>
             {
-                var fadeOut = new DoubleAnimation
-                {
-                    To = 0,
-                    Duration = TimeSpan.FromSeconds(0.3)
-                };
+                if (LoadingGrid == null) return;
+                var fade = new DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.3));
+                fade.Completed += (s, e) => { LoadingGrid.Visibility = Visibility.Collapsed; };
+                LoadingGrid.BeginAnimation(OpacityProperty, fade);
+            });
+        }
 
-                var tcs = new TaskCompletionSource<bool>();
-                fadeOut.Completed += (s, e) =>
+        private void AnimatePanelSwitch(UIElement hide, UIElement show)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                var hideAnim = new DoubleAnimation(1, 0, TimeSpan.FromSeconds(0.5));
+                hideAnim.Completed += (s, e) =>
                 {
-                    LoadingGrid.Visibility = Visibility.Collapsed;
-                    LoadingRotate.BeginAnimation(RotateTransform.AngleProperty, null);
-                    tcs.SetResult(true);
+                    hide.Visibility = Visibility.Collapsed;
+                    show.Visibility = Visibility.Visible;
+                    show.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.5)));
                 };
+                hide.BeginAnimation(OpacityProperty, hideAnim);
+            });
+        }
+        #endregion
 
-                LoadingGrid.BeginAnimation(UIElement.OpacityProperty, fadeOut);
-                await tcs.Task;
-                EnableAllControls();
+        #region 清理
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            if (_sshClient != null && _sshClient.IsConnected)
+            {
+                _sshClient.Disconnect();
+                _sshClient.Dispose();
             }
         }
-
-        private void DisableAllControls()
-        {
-            ServerIpInput.IsEnabled = false;
-            PortInput.IsEnabled = false;
-            NoAuthRadio.IsEnabled = false;
-            PasswordRadio.IsEnabled = false;
-            KeyRadio.IsEnabled = false;
-            PasswordInput.IsEnabled = false;
-            KeySelectButton.IsEnabled = false;
-            ConnectButton.IsEnabled = false;
-        }
-
-        private void EnableAllControls()
-        {
-            ServerIpInput.IsEnabled = true;
-            PortInput.IsEnabled = true;
-            NoAuthRadio.IsEnabled = true;
-            PasswordRadio.IsEnabled = true;
-            KeyRadio.IsEnabled = true;
-            PasswordInput.IsEnabled = PasswordRadio.IsChecked == true;
-            KeySelectButton.IsEnabled = KeyRadio.IsChecked == true;
-            ConnectButton.IsEnabled = true;
-        }
+        #endregion
     }
 }

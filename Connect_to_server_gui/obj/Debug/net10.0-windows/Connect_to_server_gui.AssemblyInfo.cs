@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Connect_to_server_gui")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a6b22f28db12b8f250d517abf2613bd79bfd3b21")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7b9dbb7b773fdeabfbb69962aa9aa53fdace5031")]
 [assembly: System.Reflection.AssemblyProductAttribute("Connect_to_server_gui")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Connect_to_server_gui")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
